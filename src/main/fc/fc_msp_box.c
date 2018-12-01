@@ -193,7 +193,7 @@ void initActiveBoxIds(void)
     const bool navFlowDeadReckoning = sensors(SENSOR_OPFLOW) && sensors(SENSOR_ACC) && positionEstimationConfig()->allow_dead_reckoning;
     if (navFlowDeadReckoning || navReadyQuads || navReadyPlanes) {
         activeBoxIds[activeBoxIdCount++] = BOXNAVPOSHOLD;
-		if (STATE(FIXED_WING)) {
+        if (STATE(FIXED_WING)) {
             activeBoxIds[activeBoxIdCount++] = BOXLOITERDIRCHN;
         }
     }
