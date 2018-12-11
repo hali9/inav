@@ -27,9 +27,16 @@
 #include "common/maths.h"
 #include "common/utils.h"
 
+#include "fc/config.h"
+
 #include "flight/wind_estimator.h"
 
 #include "io/gps.h"
+
+#include "navigation/navigation.h"
+#include "navigation/navigation_private.h"
+
+#include "sensors/pitotmeter.h"
 
 #include "pitotmeter.h"
 #include "pitotmeter_virtual.h"
@@ -56,10 +63,10 @@ static void virtualPitotCalculate(pitotDev_t *pitot, float *pressure, float *tem
         float windSpeed = getEstimatedHorizontalWindSpeed(&windHeading); //cm/s
         int32_t heading = posControl.actualState.yaw; //centidegrees
         float horizontalWindSpeed = windSpeed * cos_approx(DEGREES_TO_RADIANS(windHeading - heading));
-        float airSpeed -= horizontalWindSpeed;
-    }    
+        airSpeed -= horizontalWindSpeed;
+    }
     if (pressure)
-        *pressure = sq(airSpeed) * AIR_DENSITY_SEA_LEVEL_15C / 2 + * P0;
+        *pressure = sq(airSpeed) * AIR_DENSITY_SEA_LEVEL_15C / 2 + P0;
     if (temperature)
         *temperature = 288.15f;     // Temperature at standard sea level (288.15 K)
 }
