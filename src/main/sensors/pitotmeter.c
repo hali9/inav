@@ -102,12 +102,10 @@ bool pitotDetect(pitotDev_t *dev, uint8_t pitotHardwareToUse)
 
         case PITOT_VIRTUAL:
 #if defined(USE_PITOT_VIRTUAL)
-            /*
-            if (adcPitotDetect(&pitot)) {
-                pitotHardware = PITOT_ADC;
+            if (virtualPitotDetect(&pitot)) {
+                pitotHardware = PITOT_VIRTUAL;
                 break;
             }
-            */
 #endif
             /* If we are asked for a specific sensor - break out, otherwise - fall through and continue */
             if (pitotHardwareToUse != PITOT_AUTODETECT) {
