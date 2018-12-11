@@ -34,6 +34,7 @@
 #include "drivers/pitotmeter.h"
 #include "drivers/pitotmeter_ms4525.h"
 #include "drivers/pitotmeter_adc.h"
+#include "drivers/pitotmeter_virtual.h"
 #include "drivers/time.h"
 
 #include "fc/config.h"
@@ -102,12 +103,10 @@ bool pitotDetect(pitotDev_t *dev, uint8_t pitotHardwareToUse)
 
         case PITOT_VIRTUAL:
 #if defined(USE_PITOT_VIRTUAL)
-            /*
-            if (adcPitotDetect(&pitot)) {
-                pitotHardware = PITOT_ADC;
+            if (virtualPitotDetect(dev)) {
+                pitotHardware = PITOT_VIRTUAL;
                 break;
             }
-            */
 #endif
             /* If we are asked for a specific sensor - break out, otherwise - fall through and continue */
             if (pitotHardwareToUse != PITOT_AUTODETECT) {
@@ -216,10 +215,6 @@ uint32_t pitotUpdate(void)
         break;
     }
 }
-
-#define AIR_DENSITY_SEA_LEVEL_15C   1.225f      // Air density at sea level and 15 degrees Celsius
-#define AIR_GAS_CONST               287.1f      //  J / (kg * K)
-#define P0                          101325.0f   // standard pressure
 
 static void performPitotCalibrationCycle(void)
 {
