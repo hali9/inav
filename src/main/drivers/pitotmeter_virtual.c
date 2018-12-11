@@ -22,6 +22,8 @@
 
 #include "build/build_config.h"
 
+#include "config/feature.h"
+
 #include "common/maths.h"
 #include "common/utils.h"
 
