@@ -103,7 +103,7 @@ bool pitotDetect(pitotDev_t *dev, uint8_t pitotHardwareToUse)
 
         case PITOT_VIRTUAL:
 #if defined(USE_PITOT_VIRTUAL)
-            if (virtualPitotDetect(&pitot)) {
+            if (virtualPitotDetect(dev)) {
                 pitotHardware = PITOT_VIRTUAL;
                 break;
             }
