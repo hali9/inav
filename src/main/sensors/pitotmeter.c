@@ -34,6 +34,7 @@
 #include "drivers/pitotmeter.h"
 #include "drivers/pitotmeter_ms4525.h"
 #include "drivers/pitotmeter_adc.h"
+#include "drivers/pitotmeter_virtual.h"
 #include "drivers/time.h"
 
 #include "fc/config.h"
