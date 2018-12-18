@@ -21,6 +21,7 @@
 #include <platform.h>
 
 #include "build/build_config.h"
+#include "build/debug.h"
 
 #include "config/feature.h"
 
@@ -28,7 +29,6 @@
 #include "common/utils.h"
 
 #include "fc/config.h"
-//#include "fc/rc_controls.h"
 
 #include "flight/pid.h"
 #include "flight/wind_estimator.h"
