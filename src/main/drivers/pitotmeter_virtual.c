@@ -58,22 +58,20 @@ static void virtualPitotRead(pitotDev_t *pitot)
 static void virtualPitotCalculate(pitotDev_t *pitot, float *pressure, float *temperature)
 {
     UNUSED(pitot);
-    float airSpeed = gpsSol.groundSpeed; //cm/s
-    DEBUG_SET(DEBUG_WIND_ESTIMATOR, 3, gpsSol.groundSpeed); 
+    float airSpeed = pidProfile()->fixedWingReferenceAirspeed; //float cm/s
+    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, 0);
+    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, 0);
+    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, 0);
+    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 3, gpsSol.groundSpeed); 
     if (isEstimatedWindSpeedValid()) {
         uint16_t windHeading = 0; //centidegrees
         float windSpeed = getEstimatedHorizontalWindSpeed(&windHeading); //cm/s
-        float horizontalWindSpeed = windSpeed * cos_approx(DEGREES_TO_RADIANS(windHeading - posControl.actualState.yaw)); //int32_t centidegrees
-        airSpeed -= horizontalWindSpeed;
-        DEBUG_SET(DEBUG_WIND_ESTIMATOR, 0, windHeading);
-        DEBUG_SET(DEBUG_WIND_ESTIMATOR, 1, windSpeed);
-	    DEBUG_SET(DEBUG_WIND_ESTIMATOR, 2, horizontalWindSpeed);
-    } else {
-        airSpeed = pidProfile()->fixedWingReferenceAirspeed; //float cm/s
-        DEBUG_SET(DEBUG_WIND_ESTIMATOR, 0, 0);
-        DEBUG_SET(DEBUG_WIND_ESTIMATOR, 1, 0);
-	    DEBUG_SET(DEBUG_WIND_ESTIMATOR, 2, 0);
-    }    
+        float horizontalWindSpeed = windSpeed * cos_approx(DEGREES_TO_RADIANS(windHeading - posControl.actualState.yaw)); //yaw int32_t centidegrees
+        airSpeed = gpsSol.groundSpeed - horizontalWindSpeed; //cm/s
+        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, windHeading);
+        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, windSpeed);
+        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, horizontalWindSpeed);
+    }
     if (pressure)
         *pressure = sq(airSpeed) * AIR_DENSITY_SEA_LEVEL_15C / 2 + P0;
     if (temperature)
