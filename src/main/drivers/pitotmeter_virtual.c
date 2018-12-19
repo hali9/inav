@@ -23,6 +23,8 @@
 #include "build/build_config.h"
 #include "build/debug.h"
 
+#include "common/axis.h"
+
 #include "config/feature.h"
 
 #include "common/maths.h"
