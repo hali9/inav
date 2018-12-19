@@ -261,7 +261,7 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
                     virtualAproach = MAX(virtualAproach, NAV_RTH_APROACH_LANDING_MAXALT);
                 }               
                 float distanceAproach = sqrtf(sq(navConfig()->fw.loiter_radius) + sq(navConfig()->fw.land_aproach_distance));
-                int32_t angle = loiterDirection() * DEGREES_TO_CENTIDEGREES(180 - RADIANS_TO_DEGREES(acos_approx(navConfig()->fw.loiter_radius / distanceAproach)));
+                int32_t angle = DEGREES_TO_CENTIDEGREES(180 - RADIANS_TO_DEGREES(acos_approx(navConfig()->fw.loiter_radius / distanceAproach)));
                 DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 1, angle);
                 if ((ABS(wrap_18000(((posControl.homeWaypointAbove.yaw + angle) % DEGREES_TO_CENTIDEGREES(360)) - posControl.actualState.yaw)) < DEGREES_TO_CENTIDEGREES(15)) &&
                     (virtualAproach == NAV_RTH_APROACH_LANDING_MAXALT)) {
@@ -561,8 +561,8 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
             (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_NO_APR && !FLIGHT_MODE(FAILSAFE_MODE) && virtualAproach==NAV_RTH_APROACH_LANDING_FINAL) ||
             (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_NO_APR && FLIGHT_MODE(FAILSAFE_MODE))
            ) {
-            if ( ((posControl.flags.estAltStatus >= EST_USABLE) && (navGetCurrentActualPositionAndVelocity()->pos.z <= navConfig()->general.land_motor_off_alt)) ||
-                 ((posControl.flags.estAglStatus == EST_TRUSTED) && (posControl.actualState.agl.pos.z <= navConfig()->general.land_motor_off_alt)) ) {
+            if ( ((posControl.flags.estAltStatus >= EST_USABLE) && (navGetCurrentActualPositionAndVelocity()->pos.z <= navConfig()->fw.land_motor_off_alt)) ||
+                 ((posControl.flags.estAglStatus == EST_TRUSTED) && (posControl.actualState.agl.pos.z <= navConfig()->fw.land_motor_off_alt)) ) {
 
                 // Set motor to min. throttle and stop it when MOTOR_STOP feature is enabled
                 rcCommand[THROTTLE] = motorConfig()->minthrottle;
