@@ -68,14 +68,15 @@ static void virtualPitotCalculate(pitotDev_t *pitot, float *pressure, float *tem
     if (isEstimatedWindSpeedValid()) {
         uint16_t windHeading = 0; //centidegrees
         float windSpeed = getEstimatedHorizontalWindSpeed(&windHeading); //cm/s
-        float horizontalWindSpeed = windSpeed * cos_approx(CENTIDEGREES_TO_RADIANS(windHeading - posControl.actualState.yaw)); //yaw int32_t centidegrees
-        airSpeed = gpsSol.groundSpeed - horizontalWindSpeed; //cm/s
         DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, CENTIDEGREES_TO_DECIDEGREES(windHeading)); //deci because overflow
         DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, windSpeed);
+        float horizontalWindSpeed = windSpeed * cos_approx(CENTIDEGREES_TO_RADIANS(windHeading - posControl.actualState.yaw)); //yaw int32_t centidegrees
         DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, horizontalWindSpeed);
+        airSpeed = posControl.actualState.velXY - horizontalWindSpeed; //cm/s //gpsSol.groundSpeed
     }
     if (pressure)
-        *pressure = sq(airSpeed / 100) * AIR_DENSITY_SEA_LEVEL_15C / 2 + P0;
+        //*pressure = sq(airSpeed / 100) * AIR_DENSITY_SEA_LEVEL_15C / 2 + P0;
+        *pressure = sq(airSpeed) * AIR_DENSITY_SEA_LEVEL_15C / 20000f + P0;
     if (temperature)
         *temperature = 288.15f;     // Temperature at standard sea level (288.15 K)
 }
