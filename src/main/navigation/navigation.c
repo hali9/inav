@@ -2050,7 +2050,8 @@ void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t
     // Heading
     if ((useMask & NAV_POS_UPDATE_HEADING) != 0) {
         // Heading
-        if (pidProfile()->land_direction == 0 || ((pidProfile()->land_direction < 0) && (reason == NAV_HOME_RESET))) {
+        if (pidProfile()->land_direction == 0 || (pidProfile()->land_direction < 0 
+            && (reason == NAV_HOME_RESET || (reason == NAV_HOME_MIN_RTH && !STATE(FIXED_WING))))) {
             posControl.homePosition.yaw = yaw;
         } else {
             posControl.homePosition.yaw = DEGREES_TO_CENTIDEGREES(ABS(pidProfile()->land_direction) % 360);
