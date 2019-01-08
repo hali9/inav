@@ -339,6 +339,7 @@ After restoring it's always a good idea to `dump` or `diff` the settings once ag
 |  fw_iterm_throw_limit  | 165 | Limits max/min I-term value in stabilization PID controller in case of Fixed Wing. It solves the problem of servo saturation before take-off/throwing the airplane into the air. By default, error accumulated in I-term can not exceed 1/3 of servo throw (around 165us). Set 0 to disable completely. |
 |  fw_reference_airspeed  | 1000 | Reference airspeed. Set this to airspeed at which PIDs were tuned. Usually should be set to cruise airspeed. Also used for coordinated turn calculation if airspeed sensor is not present. |
 |  fw_turn_assist_yaw_gain  | 1 | Gain required to keep the yaw rate consistent with the turn rate for a coordinated turn (in TURN_ASSIST mode). Value significantly different from 1.0 indicates a problem with the airspeed calibration (if present) or value of `fw_reference_airspeed` parameter |
+|  fw_loiter_direction  | RIGHT | Direction of loitering: center point on right wing (clockwise - default), or center point on left wing (counterclockwise). If equal YAW then can be changed in flight using a yaw stick. |
 |  mode_range_logic_operator  | OR | Control how Mode selection works in flight modes. If you example have Angle mode configured on two different Aux channels, this controls if you need both activated ( AND ) or if you only need one activated ( OR ) to active angle mode. |
 |  default_rate_profile  | 0 | Default = profile number |
 |  mag_declination  | 0 | Current location magnetic declination in format. For example, -6deg 37min = -637 for Japan. Leading zero in ddd not required. Get your local magnetic declination here: http://magnetic-declination.com/ . Not in use if inav_auto_mag_decl  is turned on and you acquire valid GPS fix. |
@@ -370,6 +371,7 @@ After restoring it's always a good idea to `dump` or `diff` the settings once ag
 | fw_d_level | 75 | Fixed-wing attitude stabilisation HORIZON transition point    |
 |  max_angle_inclination_rll  | 300 | Maximum inclination in level (angle) mode (ROLL axis). 100=10° |
 |  max_angle_inclination_pit  | 300 | Maximum inclination in level (angle) mode (PITCH axis). 100=10° |
+|  fw_iterm_limit_stick_position  | 0.5 | Iterm is not allowed to grow when stick position is above threshold. This solves the problem of bounceback or followthrough when full stick deflection is applied on poorely tuned fixed wings. In other words, stabilization is partialy disabled when pilot is actively controlling the aircraft and active when sticks are not touched. `0` mean stick is in center position, `1` means it is fully deflected to either side |
 |  fw_min_throttle_down_pitch  | 0 | Automatic pitch down angle when throttle is at 0 in angle mode. Progressively applied between cruise throttle and zero throttle |
 |  gyro_lpf_hz  | 60 | Software-based filter to remove mechanical vibrations from the gyro signal. Value is cutoff frequency (Hz). For larger frames with bigger props set to lower value. |
 |  acc_lpf_hz  | 15 | Software-based filter to remove mechanical vibrations from the accelerometer measurements. Value is cutoff frequency (Hz). For larger frames with bigger props set to lower value. |
@@ -423,4 +425,12 @@ After restoring it's always a good idea to `dump` or `diff` the settings once ag
 | motor_accel_time | 0 | Minimum time for the motor(s) to accelerate from 0 to 100% throttle (ms) [0-1000] |
 | motor_decel_time | 0 | Minimum time for the motor(s) to deccelerate from 100 to 0% throttle (ms) [0-1000] |
 | thr_comp_weight | 0.692 | Weight used for the throttle compensation based on battery voltage. See the [battery documentation](Battery.md#automatic-throttle-compensation-based-on-battery-voltage) |
-
+| nav_mc_braking_speed_threshold | 100 | min speed in cm/s above which braking can happen |
+| nav_mc_braking_disengage_speed | 75 | braking is disabled when speed goes below this value |
+| nav_mc_braking_timeout | 2000 | timeout in ms for braking |
+| nav_mc_braking_boost_factor | 100 | acceleration factor for BOOST phase |
+| nav_mc_braking_boost_timeout | 750 | how long in ms BOOST phase can happen |
+| nav_mc_braking_boost_speed_threshold | 150 | BOOST can be enabled when speed is above this value |
+| nav_mc_braking_boost_disengage_speed | 100 | BOOST will be disabled when speed goes below this value |
+| nav_mc_braking_bank_angle | 40 | max angle that MR is allowed to bank in BOOST mode |
+| osd_artificial_horizon_max_pitch | 20 | Max pitch, in degrees, for OSD artificial horizon |
