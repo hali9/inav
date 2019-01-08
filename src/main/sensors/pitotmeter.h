@@ -58,6 +58,10 @@ typedef struct pito_s {
 
 #ifdef USE_PITOT
 
+#define AIR_DENSITY_SEA_LEVEL_15C   1.225f      // Air density at sea level and 15 degrees Celsius
+#define AIR_GAS_CONST               287.1f      //  J / (kg * K)
+#define P0                          101325.0f   // standard pressure
+
 extern pitot_t pitot;
 
 bool pitotInit(void);
