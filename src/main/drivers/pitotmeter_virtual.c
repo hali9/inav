@@ -66,7 +66,7 @@ static void virtualPitotCalculate(pitotDev_t *pitot, float *pressure, float *tem
     DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, 0);
     DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, 0);
     DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, 0);
-    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 3, gpsSol.groundSpeed); 
+    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 3, posControl.actualState.velXY); 
     if (isEstimatedWindSpeedValid()) {
         uint16_t windHeading = 0; //centidegrees
         float windSpeed = getEstimatedHorizontalWindSpeed(&windHeading); //cm/s
@@ -74,7 +74,7 @@ static void virtualPitotCalculate(pitotDev_t *pitot, float *pressure, float *tem
         DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, windSpeed);
         float horizontalWindSpeed = windSpeed * cos_approx(CENTIDEGREES_TO_RADIANS(windHeading - posControl.actualState.yaw)); //yaw int32_t centidegrees
         DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, horizontalWindSpeed);
-        airSpeed = posControl.actualState.velXY - horizontalWindSpeed; //cm/s //gpsSol.groundSpeed
+        airSpeed = posControl.actualState.velXY - horizontalWindSpeed; //float cm/s //or gpsSol.groundSpeed int16_t cm/s
     }
     if (pressure)
         //*pressure = sq(airSpeed / 100) * AIR_DENSITY_SEA_LEVEL_15C / 2 + P0;
