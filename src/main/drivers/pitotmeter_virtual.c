@@ -47,14 +47,16 @@
 
 #if defined(USE_WIND_ESTIMATOR) && defined(USE_PITOT_VIRTUAL) 
 
-static void virtualPitotStart(pitotDev_t *pitot)
+static bool virtualPitotStart(pitotDev_t *pitot)
 {
     UNUSED(pitot);
+    return true;
 }
 
-static void virtualPitotRead(pitotDev_t *pitot)
+static bool virtualPitotRead(pitotDev_t *pitot)
 {
     UNUSED(pitot);
+    return true;
 }
 
 static void virtualPitotCalculate(pitotDev_t *pitot, float *pressure, float *temperature)
