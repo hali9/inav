@@ -62,20 +62,23 @@ static bool virtualPitotRead(pitotDev_t *pitot)
 static void virtualPitotCalculate(pitotDev_t *pitot, float *pressure, float *temperature)
 {
     UNUSED(pitot);
-    //float airSpeed = pidProfile()->fixedWingReferenceAirspeed; //float cm/s
-    float airspeed = posControl.actualState.velXY; //cm/s or gpsSol.groundSpeed int16_t cm/s
-    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, 0);
-    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, 0);
-    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, 0);
-    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 3, airspeed); 
-    if (isEstimatedWindSpeedValid()) {
-        uint16_t windHeading = 0; //centidegrees
-        float windSpeed = getEstimatedHorizontalWindSpeed(&windHeading); //cm/s
-        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, CENTIDEGREES_TO_DECIDEGREES(windHeading)); //deci because overflow
-        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, windSpeed);
-        float horizontalWindSpeed = windSpeed * cos_approx(CENTIDEGREES_TO_RADIANS(windHeading - posControl.actualState.yaw)); //yaw int32_t centidegrees
-        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, horizontalWindSpeed);
-        airSpeed -= horizontalWindSpeed;
+    float airspeed = 0.00f;
+    if (pitotIsCalibrationComplete()) {
+        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, 0);
+        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, 0);
+        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, 0);
+        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 3, posControl.actualState.velXY); 
+        if (isEstimatedWindSpeedValid()) {
+            uint16_t windHeading = 0; //centidegrees
+            float windSpeed = getEstimatedHorizontalWindSpeed(&windHeading); //cm/s
+            DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, CENTIDEGREES_TO_DECIDEGREES(windHeading)); //deci because overflow
+            DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, windSpeed);
+            float horizontalWindSpeed = windSpeed * cos_approx(CENTIDEGREES_TO_RADIANS(windHeading - posControl.actualState.yaw)); //yaw int32_t centidegrees
+            DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, horizontalWindSpeed);
+            airSpeed = posControl.actualState.velXY - horizontalWindSpeed; //float cm/s or gpsSol.groundSpeed int16_t cm/s
+        } else {
+            airSpeed = pidProfile()->fixedWingReferenceAirspeed; //float cm/s
+        }
     }
     if (pressure)
         //*pressure = sq(airSpeed / 100) * AIR_DENSITY_SEA_LEVEL_15C / 2 + P0;
