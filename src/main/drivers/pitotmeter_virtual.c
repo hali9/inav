@@ -63,10 +63,11 @@ static void virtualPitotCalculate(pitotDev_t *pitot, float *pressure, float *tem
 {
     UNUSED(pitot);
     float airspeed = 0.00f;
+    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, 0);
+    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, 0);
+    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, 0);
+    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 3, 0);
     if (pitotIsCalibrationComplete()) {
-        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, 0);
-        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, 0);
-        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, 0);
         DEBUG_SET(DEBUG_VIRTUAL_PITOT, 3, posControl.actualState.velXY); 
         if (isEstimatedWindSpeedValid()) {
             uint16_t windHeading = 0; //centidegrees
