@@ -87,6 +87,7 @@
 #include "msp/msp_serial.h"
 
 #include "navigation/navigation.h"
+#include "navigation/navigation_private.h"
 
 #include "rx/rx.h"
 #include "rx/msp.h"
@@ -485,7 +486,15 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
     case MSP_ATTITUDE:
         sbufWriteU16(dst, attitude.values.roll);
         sbufWriteU16(dst, attitude.values.pitch);
-        sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+		if (IS_RC_MODE_ACTIVE(BOXHOMERESET)) {
+          sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.homePosition.yaw));
+          //sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.homeWaypointAbove.yaw));
+          //int32_t     yaw;             // deg * 100		  
+        } else {
+          sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+	      //int16_t absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
+          //sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(posControl.actualState.yaw));
+        }
         break;
 
     case MSP_ALTITUDE:
