@@ -106,6 +106,8 @@
 #define USE_MAG_LIS3MDL
 #define USE_MAG_AK8975
 
+#define TEMPERATURE_I2C_BUS     I2C_EXT_BUS
+
 #define USE_BARO
 
 #if defined(OMNIBUSF4PRO) || defined(OMNIBUSF4V3)
@@ -124,13 +126,10 @@
   #define USE_BARO_MS5611
 #endif
 
-#define USE_PITOT_MS4525
 #define PITOT_I2C_BUS           I2C_EXT_BUS
 
 #define USE_RANGEFINDER
 #define RANGEFINDER_I2C_BUS     I2C_EXT_BUS
-#define USE_RANGEFINDER_HCSR04_I2C
-#define USE_RANGEFINDER_VL53L0X
 
 #define USE_OPTICAL_FLOW
 #define USE_OPFLOW_CXOF
@@ -256,6 +255,7 @@
 // Number of available PWM outputs
 #define MAX_PWM_OUTPUT_PORTS    6
 #define TARGET_MOTOR_COUNT      6
+#define USE_DSHOT
 
 #define TARGET_IO_PORTA         0xffff
 #define TARGET_IO_PORTB         0xffff
