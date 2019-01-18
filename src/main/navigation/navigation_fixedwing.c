@@ -449,7 +449,7 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
         int16_t yawCorrection = constrain(posControl.rcAdjustment[YAW], 
                                          -DEKADEGREES_TO_DECIDEGREES(currentControlRateProfile->stabilized.rates[FD_YAW]),
                                           DEKADEGREES_TO_DECIDEGREES(currentControlRateProfile->stabilized.rates[FD_YAW]));
-		rcCommand[YAW] = pidRateToRcCommand(DECIDEGREES_TO_DEKADEGREES(yawCorrection),
+		rcCommand[YAW] = pidRateToRcCommand(DECIDEGREES_TO_DEGREES(yawCorrection),
                                             currentControlRateProfile->stabilized.rates[FD_YAW]);
     }
 
