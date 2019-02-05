@@ -187,6 +187,7 @@ COMMON_SRC = \
             telemetry/mavlink.c \
             telemetry/msp_shared.c \
             telemetry/smartport.c \
+            telemetry/gsm.c \
             telemetry/telemetry.c \
             io/vtx.c \
             io/vtx_string.c \
