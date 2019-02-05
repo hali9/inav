@@ -127,7 +127,7 @@ bool readOriginatingNumber(uint8_t* rv)
         DEBUG_SET(DEBUG_GSM, 0, 8);
         return false;
     }
-    for (i = 0; i < 15 && rv[i] != '\"'; i++) {
+    for (i = 0; i < MAX_GSM_LENGTH && rv[i] != '\"'; i++) {
          if (telemetryConfig()->gsmGroundStationNumber[i] != rv[i]) {
              DEBUG_SET(DEBUG_GSM, 0, 9);
              return false;
@@ -165,8 +165,7 @@ void handleGsmTelemetry()
         gsmResponse[ri] = c;
         if (c == '\n' || ri == GSM_RESPONSE_BUFFER_SIZE) {
             gsmResponse[ri] = '\0'; //response line expected to end in \r\n, remove them
-            if (ri > 0)
-                gsmResponse[--ri] = '\0';
+            if (ri > 0) gsmResponse[--ri] = '\0';
             readGsmResponse();
             ri = 0;
             return;
