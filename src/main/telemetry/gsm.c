@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(USE_TELEMETRY) && defined(USE_TELEMETRY_GSM)
+
 #include "build/build_config.h"
 #include "build/debug.h"
 
@@ -62,8 +64,6 @@
 
 #include "telemetry/gsm.h"
 #include "telemetry/telemetry.h"
-
-#if defined(USE_TELEMETRY) && defined(USE_TELEMETRY_GSM)
 
 static serialPortConfig_t *portConfig;
 static serialPort_t *gsmPort;
