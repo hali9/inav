@@ -48,6 +48,8 @@
 #include "telemetry/jetiexbus.h"
 #include "telemetry/ibus.h"
 #include "telemetry/crsf.h"
+#include "telemetry/gsm.h"
+
 
 PG_REGISTER_WITH_RESET_TEMPLATE(telemetryConfig_t, telemetryConfig, PG_TELEMETRY_CONFIG, 1);
 
@@ -66,6 +68,7 @@ PG_RESET_TEMPLATE(telemetryConfig_t, telemetryConfig,
     .smartportFuelUnit = SMARTPORT_FUEL_UNIT_MAH,
     .ibusTelemetryType = 0,
     .ltmUpdateRate = LTM_RATE_NORMAL,
+    .gsmGroundStationNumber = { 0 },
 );
 
 void telemetryInit(void)
@@ -100,6 +103,10 @@ void telemetryInit(void)
 
 #if defined(USE_SERIALRX_CRSF) && defined(USE_TELEMETRY_CRSF)
     initCrsfTelemetry();
+#endif
+
+#if defined(USE_TELEMETRY_GSM)
+    initGsmTelemetry();
 #endif
 
     telemetryCheckState();
@@ -159,6 +166,10 @@ void telemetryCheckState(void)
 #if defined(USE_SERIALRX_CRSF) && defined(USE_TELEMETRY_CRSF)
     checkCrsfTelemetryState();
 #endif
+
+#if defined(USE_TELEMETRY_GSM)
+    checkGsmTelemetryState();
+#endif
 }
 
 void telemetryProcess(timeUs_t currentTimeUs)
@@ -195,6 +206,10 @@ void telemetryProcess(timeUs_t currentTimeUs)
 
 #if defined(USE_SERIALRX_CRSF) && defined(USE_TELEMETRY_CRSF)
     handleCrsfTelemetry(currentTimeUs);
+#endif
+
+#if defined(USE_TELEMETRY_GSM)
+    handleGsmTelemetry();
 #endif
 }
 

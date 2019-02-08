@@ -74,7 +74,7 @@ tables:
   - name: debug_modes
     values: ["NONE", "GYRO", "NOTCH", "NAV_LANDING", "FW_ALTITUDE", "AGL", "FLOW_RAW",
       "FLOW", "SBUS", "FPORT", "ALWAYS", "STAGE2", "WIND_ESTIMATOR", "SAG_COMP_VOLTAGE",
-      "VIBE", "CRUISE", "REM_FLIGHT_TIME", "SMARTAUDIO","ACC"]
+      "VIBE", "CRUISE", "REM_FLIGHT_TIME", "SMARTAUDIO","ACC","GSM"]
   - name: async_mode
     values: ["NONE", "GYRO", "ALL"]
   - name: aux_operator
@@ -1510,6 +1510,9 @@ groups:
         field: ltmUpdateRate
         condition: USE_TELEMETRY_LTM
         table: ltm_rates
+      - name: gsm_ground_station_number
+        field: gsmGroundStationNumber
+        condition: USE_TELEMETRY_GSM
 
   - name: PG_ELERES_CONFIG
     type: eleresConfig_t

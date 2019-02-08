@@ -30,6 +30,7 @@
 
 #include "io/serial.h"
 
+#define MAX_GSM_LENGTH 15
 
 typedef enum {
     FRSKY_FORMAT_DMS = 0,
@@ -68,6 +69,7 @@ typedef struct telemetryConfig_s {
     smartportFuelUnit_e smartportFuelUnit;
     uint8_t ibusTelemetryType;
     uint8_t ltmUpdateRate;
+    char gsmGroundStationNumber[MAX_GSM_LENGTH + 1];
 } telemetryConfig_t;
 
 PG_DECLARE(telemetryConfig_t, telemetryConfig);
