@@ -134,9 +134,10 @@ void handleGsmTelemetry() {
         }
         gsmResponse[0] = '\0';
     }
-    if (!failsafeIsActive()) failsafeTime = now;
+    if (!(FLIGHT_MODE(FAILSAFE_MODE) && ARMING_FLAG(WAS_EVER_ARMED))) failsafeTime = now;
     if (sendingSMS || failsafeTime + 10000 < now) {
         sendingSMS = false;
+	failsafeTime = now + 60000;
         gsmTelemetryState = GSM_SEND_SMS; 
     }
     if (now < gsmNextTime) return;
