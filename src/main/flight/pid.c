@@ -186,6 +186,8 @@ PG_RESET_TEMPLATE(pidProfile_t, pidProfile,
 
         .heading_hold_rate_limit = HEADING_HOLD_RATE_LIMIT_DEFAULT,
 
+        .land_direction = 0,
+
         .max_angle_inclination[FD_ROLL] = 300,    // 30 degrees
         .max_angle_inclination[FD_PITCH] = 300,    // 30 degrees
         .pidSumLimit = PID_SUM_LIMIT_DEFAULT,
@@ -194,6 +196,9 @@ PG_RESET_TEMPLATE(pidProfile_t, pidProfile,
         .fixedWingReferenceAirspeed = 1000,
         .fixedWingCoordinatedYawGain = 1.0f,
         .fixedWingItermLimitOnStickPosition = 0.5f,
+
+        .heading_to_roll = 100,
+        .heading_to_yaw = 0,
 
         .loiter_direction = NAV_LOITER_RIGHT,
 );
