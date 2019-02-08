@@ -15,8 +15,9 @@
  * along with INAV.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "io/gps.h"
-#include "io/serial.h"
+#pragma once
+
+#include <stdbool.h>
 
 #define GSM_AT_COMMAND_MAX_SIZE 256
 #define GSM_RESPONSE_BUFFER_SIZE 256
@@ -46,7 +47,7 @@ typedef enum  {
 
 bool checkGroundStationNumber(uint8_t*);
 void sendATCommand(const char* command);
-void handleGsmTelemetry();
+void handleGsmTelemetry(void);
 void freeGsmTelemetryPort(void);
 void initGsmTelemetry(void);
 void checkGsmTelemetryState(void);
