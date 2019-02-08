@@ -92,7 +92,7 @@ void handleGsmTelemetry() {
                 gsmResponseIndex = 0; //data ok
                 break;
             } else {
-                gsmResponse[gsmResponseIndex] = c;       
+                gsmResponse[gsmResponseIndex] = c;
                 gsmResponseIndex++;
             }
         } else {
@@ -100,8 +100,8 @@ void handleGsmTelemetry() {
             gsmResponseIndex = 0; //data ok
             break;
         }
-    }    
-	if (gsmResponse[0] != '\0' && gsmResponseIndex == 0) {
+    }
+    if (gsmResponse[0] != '\0' && gsmResponseIndex == 0) {
         if (readingSMS) {
             readingSMS = false;
             if (sl_strcasecmp((char*)gsmResponse,GSM_SMS_COMMAND_TELEMETRY) == 0) sendingSMS = true;
@@ -109,24 +109,24 @@ void handleGsmTelemetry() {
             else if (sl_strcasecmp((char*)gsmResponse,GSM_SMS_COMMAND_ABORT_RTH) == 0) abortForcedRTH();
         }
         if (gsmResponse[0] == 'O' && gsmResponse[1] == 'K') {
-	        if (!gsmWaitAfterResponse) gsmNextTime = now + 500;
+            if (!gsmWaitAfterResponse) gsmNextTime = now + 500;
         } else if (gsmResponse[0] == 'E' && gsmResponse[1] == 'R') {
-	        if (!gsmWaitAfterResponse) gsmNextTime = now + 500;
+            if (!gsmWaitAfterResponse) gsmNextTime = now + 500;
         } else if (gsmResponse[0] == '+') {
-	        int i;
+            int i;
             for (i = 0; i < GSM_RESPONSE_BUFFER_SIZE && gsmResponse[i] != ':'; i++);
             if (gsmResponse[i] == ':') {
-	            gsmResponseValue = &gsmResponse[i+2];
-		        if (gsmResponse[1] == 'C' && gsmResponse[2] == 'S') { //+CSQ: 26,0
+                gsmResponseValue = &gsmResponse[i+2];
+                if (gsmResponse[1] == 'C' && gsmResponse[2] == 'S') { //+CSQ: 26,0
                     int j;
-		            for (j = i+2; j < GSM_RESPONSE_BUFFER_SIZE && gsmResponse[j] != ','; j++);
+                    for (j = i+2; j < GSM_RESPONSE_BUFFER_SIZE && gsmResponse[j] != ','; j++);
                     gsmResponse[j] = '\0';
-                    gsmRssi = atoi((char*)gsmResponseValue);                        
+                    gsmRssi = atoi((char*)gsmResponseValue);
                 } else if (gsmResponse[1] == 'C' && gsmResponse[2] == 'L') { //+CLIP: "ddxxxxxxxxx",145,,,,1
-			        if (checkGroundStationNumber(&gsmResponse[8])) {
-    			        gsmNextTime = now + 5000;
-			            sendingSMS = true;
-				    }
+                    if (checkGroundStationNumber(&gsmResponse[8])) {
+                        gsmNextTime = now + 5000;
+                        sendingSMS = true;
+                    }
                 } else if (gsmResponse[1] == 'C' && gsmResponse[2] == 'M') { //+CMT: "+ddxxxxxxxxx",,"yyyy/MM/dd,hh:mm:ss+xx"<CR><LF>T
                     if (checkGroundStationNumber(&gsmResponse[8])) readingSMS = true; // next gsmResponse line will be SMS content
                 }
@@ -137,26 +137,57 @@ void handleGsmTelemetry() {
     if (!(FLIGHT_MODE(FAILSAFE_MODE) && ARMING_FLAG(WAS_EVER_ARMED))) failsafeTime = now;
     if (sendingSMS || failsafeTime + 10000 < now) {
         sendingSMS = false;
-	failsafeTime = now + 60000;
+        failsafeTime = now + 60000;
         gsmTelemetryState = GSM_SEND_SMS; 
     }
     if (now < gsmNextTime) return;
     gsmNextTime = now + 5000;      //by default, if OK or ERROR not received, wait this long
     gsmWaitAfterResponse = false;  //by default, if OK or ERROR received, go to next state immediately.
     switch (gsmTelemetryState) {
-	case GSM_NONE:                                                       gsmTelemetryState = GSM_INIT_AT;      gsmNextTime = now + 10000; break;
-    case GSM_INIT_AT:              sendATCommand("AT\r\n");              gsmTelemetryState = GSM_INIT_ECHO;                               break;	
-    case GSM_INIT_ECHO:            sendATCommand("ATE0\r\n");            gsmTelemetryState = GSM_INIT_SIM;                                break;
-    case GSM_INIT_SIM:             sendATCommand("AT+CPBS=\"SM\"\r\n");  gsmTelemetryState = GSM_INIT_ENTER_PIN;                          break;
-    case GSM_INIT_ENTER_PIN:       sendATCommand("AT+CPIN=0000\r\n");    gsmTelemetryState = GSM_INIT_SET_SMS;                            break;
-    case GSM_INIT_SET_SMS:         sendATCommand("AT+CMGF=1\r\n");       gsmTelemetryState = GSM_INIT_SET_SMS_RECEIVE;                    break;
-    case GSM_INIT_SET_SMS_RECEIVE: sendATCommand("AT+CNMI=3,2\r\n");     gsmTelemetryState = GSM_INIT_SET_CLIP;                           break;
-    case GSM_INIT_SET_CLIP:        sendATCommand("AT+CLIP=1\r\n");       gsmTelemetryState = GSM_READ_SMS;                                break;
-    case GSM_READ_SMS:             sendATCommand("AT+CMGL=\"ALL\"\r\n"); gsmTelemetryState = GSM_DELETE_SMS;   gsmNextTime = now + 5000;  break;
-    case GSM_DELETE_SMS:           sendATCommand("AT+CMGD=1,1\r\n");     gsmTelemetryState = GSM_CHECK_SIGNAL; gsmNextTime = now + 5000;  break;
-    case GSM_CHECK_SIGNAL:         sendATCommand("AT+CSQ\r\n");          gsmTelemetryState = GSM_INIT_AT;      gsmNextTime = now + 10000; gsmWaitAfterResponse = true; break;
-    case GSM_SEND_SMS:             sendATCommand("AT+CMGS=\""); sendATCommand((char*)telemetryConfig()->gsmGroundStationNumber); sendATCommand("\"\r");
-        gsmTelemetryState = GSM_SEND_SMS_ENTER; gsmNextTime = now + 100; break;
+    case GSM_NONE:
+        gsmTelemetryState = GSM_INIT_AT;
+        gsmNextTime = now + 10000;
+        break;
+    case GSM_INIT_AT: sendATCommand("AT\r\n");
+        gsmTelemetryState = GSM_INIT_ECHO;
+        break;
+    case GSM_INIT_ECHO: sendATCommand("ATE0\r\n");
+        gsmTelemetryState = GSM_INIT_SIM;
+        break;
+    case GSM_INIT_SIM: sendATCommand("AT+CPBS=\"SM\"\r\n");
+        gsmTelemetryState = GSM_INIT_ENTER_PIN;
+        break;
+    case GSM_INIT_ENTER_PIN: sendATCommand("AT+CPIN=0000\r\n");
+        gsmTelemetryState = GSM_INIT_SET_SMS;
+        break;
+    case GSM_INIT_SET_SMS: sendATCommand("AT+CMGF=1\r\n");
+        gsmTelemetryState = GSM_INIT_SET_SMS_RECEIVE;
+        break;
+    case GSM_INIT_SET_SMS_RECEIVE: sendATCommand("AT+CNMI=3,2\r\n");
+        gsmTelemetryState = GSM_INIT_SET_CLIP;
+        break;
+    case GSM_INIT_SET_CLIP: sendATCommand("AT+CLIP=1\r\n");
+        gsmTelemetryState = GSM_READ_SMS;
+        break;
+    case GSM_READ_SMS: sendATCommand("AT+CMGL=\"ALL\"\r\n");
+        gsmTelemetryState = GSM_DELETE_SMS;
+        gsmNextTime = now + 5000;
+        break;
+    case GSM_DELETE_SMS: sendATCommand("AT+CMGD=1,1\r\n");
+        gsmTelemetryState = GSM_CHECK_SIGNAL;
+        gsmNextTime = now + 5000;
+        break;
+    case GSM_CHECK_SIGNAL: sendATCommand("AT+CSQ\r\n");
+        gsmTelemetryState = GSM_INIT_AT;
+        gsmNextTime = now + 10000;
+        gsmWaitAfterResponse = true;
+        break;
+    case GSM_SEND_SMS: sendATCommand("AT+CMGS=\"");
+        sendATCommand((char*)telemetryConfig()->gsmGroundStationNumber);
+        sendATCommand("\"\r");
+        gsmTelemetryState = GSM_SEND_SMS_ENTER;
+        gsmNextTime = now + 100;
+        break;
     case GSM_SEND_SMS_ENTER: {
         uint16_t vbat = getBatteryVoltage();
         int32_t E7 = 10000000;
@@ -169,7 +200,7 @@ void handleGsmTelemetry() {
         }
 #if defined(USE_NAV)
         alt = getEstimatedActualPosition(Z) / 100; //cm -> m
-#endif       
+#endif
         int len = tfp_sprintf((char*)atCommand,  //\x1a sends msg, \x1b cancels
           "VBAT:%d.%d ALT:%ld DIST:%d SPEED:%ld TDIST:%ld AVGSPD:%ld SATS:%d GSM:%d google.com/maps/dir/%ld.%07ld,%ld.%07ld/@%ld.%07ld,%ld.%07ld,500m\x1a",
           vbat / 100, vbat % 100, alt, GPS_distanceToHome, gs, getTotalTravelDistance() / 100, lrintf(calculateAverageSpeed()), gpsSol.numSat, gsmRssi, 
@@ -179,14 +210,17 @@ void handleGsmTelemetry() {
         break; }
     }
 }
+
 void freeGsmTelemetryPort(void) {
     closeSerialPort(gsmPort);
     gsmPort = NULL;
     gsmEnabled = false;
 }
+
 void initGsmTelemetry(void) {
     portConfig = findSerialPortConfig(FUNCTION_TELEMETRY_GSM);
 }
+
 void checkGsmTelemetryState(void) {
     if (gsmEnabled) return;
     if (!portConfig) return;
@@ -195,4 +229,3 @@ void checkGsmTelemetryState(void) {
     if (!gsmPort) return;
     gsmEnabled = true;
 }
-
