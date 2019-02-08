@@ -94,7 +94,7 @@ void sendATCommand(const char* command) {
     serialWriteBuf(gsmPort, (const uint8_t*) command, len);
 }
 
-void handleGsmTelemetry() {
+void handleGsmTelemetry(void) {
     if (!gsmEnabled) return;
     if (!gsmPort) return;
     uint32_t now = millis();
