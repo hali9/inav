@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "platform.h"
+
 #if defined(USE_TELEMETRY) && defined(USE_TELEMETRY_GSM)
 
 #include "build/build_config.h"
@@ -211,15 +213,15 @@ void handleGsmTelemetry(void) {
         if (sensors(SENSOR_GPS)) {
             lat = gpsSol.llh.lat;
             lon = gpsSol.llh.lon;
-            alt = gpsSol.llh.alt / 100; //cm -> m
-            gs = gpsSol.groundSpeed / 100; //cm/s -> m/s
+            alt = gpsSol.llh.alt; //need / 100 to convert cm -> m
+            gs = gpsSol.groundSpeed / 100; //need / 100 to convert cm/s -> m/s
         }
 #if defined(USE_NAV)
-        alt = getEstimatedActualPosition(Z) / 100; //cm -> m
+        if (getEstimatedActualPosition(Z) != 0) alt = getEstimatedActualPosition(Z); //need / 100 to convert cm -> m
 #endif
         int len = tfp_sprintf((char*)atCommand,  //\x1a sends msg, \x1b cancels
-          "VBAT:%d.%d ALT:%ld DIST:%d SPEED:%ld TDIST:%ld AVGSPD:%ld SATS:%d GSM:%d google.com/maps/dir/%ld.%07ld,%ld.%07ld/@%ld.%07ld,%ld.%07ld,500m\x1a",
-          vbat / 100, vbat % 100, alt, GPS_distanceToHome, gs, getTotalTravelDistance() / 100, lrintf(calculateAverageSpeed()), gpsSol.numSat, gsmRssi, 
+          "VBAT:%d.%d ALT:%ld DIST:%d SPEED:%ld TDIST:%ld AVGSPD:%ld SATS:%d GSM:%d google.com/maps/place/%ld.%07ld,%ld.%07ld/@%ld.%07ld,%ld.%07ld\x1a",
+          vbat / 100, vbat % 100, alt / 100, GPS_distanceToHome, gs / 100, getTotalTravelDistance() / 100, lrintf(calculateAverageSpeed()), gpsSol.numSat, gsmRssi, 
           lat / E7, lat % E7, lon / E7, lon % E7, lat / E7, lat % E7, lon / E7, lon % E7);
         serialWriteBuf(gsmPort, atCommand, len);
         gsmTelemetryState = GSM_CHECK_SIGNAL; 
