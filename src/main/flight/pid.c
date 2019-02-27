@@ -196,6 +196,9 @@ PG_RESET_TEMPLATE(pidProfile_t, pidProfile,
         .fixedWingCoordinatedYawGain = 1.0f,
         .fixedWingItermLimitOnStickPosition = 0.5f,
 
+        .heading_to_roll = 100,
+        .heading_to_yaw = 0,
+
         .loiter_direction = NAV_LOITER_RIGHT,
 );
 
