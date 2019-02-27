@@ -143,6 +143,9 @@ PG_RESET_TEMPLATE(navConfig_t, navConfig,
 
         //Fixed wing landing
         .land_dive_angle = 2,   // 2 degrees dive by default
+        .land_safe_alt = 1500, // 15m to safe flying
+        .land_motor_off_alt = 500, // 5m when motor cut off
+        .land_aproach_distance = 7500, // 75m for aproach
 
         // Fixed wing launch
         .launch_velocity_thresh = 300,         // 3 m/s
@@ -574,7 +577,7 @@ static const navigationFSMStateDescriptor_t navFSM[NAV_STATE_COUNT] = {
         .persistentId = NAV_PERSISTENT_ID_RTH_FINISHED,
         .onEntry = navOnEnteringState_NAV_STATE_RTH_FINISHED,
         .timeoutMs = 10,
-        .stateFlags = NAV_CTL_ALT | NAV_CTL_POS | NAV_CTL_YAW | NAV_REQUIRE_ANGLE | NAV_REQUIRE_MAGHOLD | NAV_REQUIRE_THRTILT | NAV_AUTO_RTH,
+        .stateFlags = NAV_CTL_ALT | NAV_REQUIRE_ANGLE | NAV_REQUIRE_THRTILT | NAV_AUTO_RTH,
         .mapToFlightModes = NAV_RTH_MODE | NAV_ALTHOLD_MODE,
         .mwState = MW_NAV_STATE_LANDED,
         .mwError = MW_NAV_ERROR_NONE,
@@ -1060,7 +1063,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_INITIALIZE(navigati
 
         // If close to home - reset home position and land
         if (posControl.homeDistance < navConfig()->general.min_rth_distance) {
-            setHomePosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL);
+            setHomePosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL, NAV_HOME_MIN_RTH);
             setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING);
 
             return NAV_FSM_EVENT_SWITCH_TO_RTH_LANDING;   // NAV_STATE_RTH_HOVER_PRIOR_TO_LANDING
@@ -1106,8 +1109,8 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_CLIMB_TO_SAFE_ALT(n
     // If we have valid pos sensor OR we are configured to ignore GPS loss
     if ((posControl.flags.estPosStatus >= EST_USABLE) || !checkForPositionSensorTimeout() || navConfig()->general.flags.rth_climb_ignore_emerg) {
         const float rthAltitudeMargin = STATE(FIXED_WING) ?
-                MAX(FW_RTH_CLIMB_MARGIN_MIN_CM, (FW_RTH_CLIMB_MARGIN_PERCENT/100.0) * ABS(posControl.homeWaypointAbove.pos.z - posControl.homePosition.pos.z)) :  // Airplane
-                MAX(MR_RTH_CLIMB_MARGIN_MIN_CM, (MR_RTH_CLIMB_MARGIN_PERCENT/100.0) * ABS(posControl.homeWaypointAbove.pos.z - posControl.homePosition.pos.z));   // Copters
+                MAX(FW_RTH_CLIMB_MARGIN_MIN_CM, (FW_RTH_CLIMB_MARGIN_PERCENT/100.0) * fabsf(posControl.homeWaypointAbove.pos.z - posControl.homePosition.pos.z)) :  // Airplane
+                MAX(MR_RTH_CLIMB_MARGIN_MIN_CM, (MR_RTH_CLIMB_MARGIN_PERCENT/100.0) * fabsf(posControl.homeWaypointAbove.pos.z - posControl.homePosition.pos.z));   // Copters
 
         if (((navGetCurrentActualPositionAndVelocity()->pos.z - posControl.homeWaypointAbove.pos.z) > -rthAltitudeMargin) || (!navConfig()->general.flags.rth_climb_first)) {
             // Delayed initialization for RTH sanity check on airplanes - allow to finish climb first as it can take some distance
@@ -1312,6 +1315,10 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_FINISHED(navigation
     // Stay in this state
     UNUSED(previousState);
     updateClimbRateToAltitudeController(-0.3f * navConfig()->general.land_descent_rate, ROC_TO_ALT_NORMAL);  // FIXME
+
+    // Prevent I-terms growing when already landed
+    pidResetErrorAccumulators();
+
     return NAV_FSM_EVENT_NONE;
 }
 
@@ -1477,6 +1484,10 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_EMERGENCY_LANDING_FINIS
 {
     // TODO:
     UNUSED(previousState);
+
+    // Prevent I-terms growing when already landed
+    pidResetErrorAccumulators();
+
     return NAV_FSM_EVENT_SUCCESS;
 }
 
@@ -1667,7 +1678,7 @@ float navPidApply3(pidController_t *pid, const float setpoint, const float measu
 
         if (pidFlags & PID_SHRINK_INTEGRATOR) {
             // Only allow integrator to shrink
-            if (ABS(newIntegrator) < ABS(pid->integrator)) {
+            if (fabsf(newIntegrator) < fabsf(pid->integrator)) {
                 pid->integrator = newIntegrator;
             }
         }
@@ -1864,13 +1875,15 @@ void updateActualHeading(bool headingValid, int32_t newHeading)
     if (newEstHeading >= EST_USABLE && posControl.flags.estHeadingStatus < EST_USABLE &&
         (posControl.homeFlags & (NAV_HOME_VALID_XY | NAV_HOME_VALID_Z)) &&
         (posControl.homeFlags & NAV_HOME_VALID_HEADING) == 0) {
-
-        // Home was stored using the fake heading (assuming boot as 0deg). Calculate
-        // the offset from the fake to the actual yaw and apply the same rotation
-        // to the home point.
-        int32_t fakeToRealYawOffset = newHeading - posControl.actualState.yaw;
-
-        posControl.homePosition.yaw += fakeToRealYawOffset;
+        if (pidProfile()->land_direction == 0) {
+            // Home was stored using the fake heading (assuming boot as 0deg). Calculate
+            // the offset from the fake to the actual yaw and apply the same rotation
+            // to the home point.
+            int32_t fakeToRealYawOffset = newHeading - posControl.actualState.yaw;
+            posControl.homePosition.yaw += fakeToRealYawOffset;
+        } else {
+            posControl.homePosition.yaw = DEGREES_TO_CENTIDEGREES(ABS(pidProfile()->land_direction));
+        }
         if (posControl.homePosition.yaw < 0) {
             posControl.homePosition.yaw += DEGREES_TO_CENTIDEGREES(360);
         }
@@ -2052,7 +2065,7 @@ bool validateRTHSanityChecker(void)
 /*-----------------------------------------------------------
  * Reset home position to current position
  *-----------------------------------------------------------*/
-void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags)
+void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags, navigationHomeReason_t reason)
 {
     // XY-position
     if ((useMask & NAV_POS_UPDATE_XY) != 0) {
@@ -2078,7 +2091,12 @@ void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t
     // Heading
     if ((useMask & NAV_POS_UPDATE_HEADING) != 0) {
         // Heading
-        posControl.homePosition.yaw = yaw;
+        if (pidProfile()->land_direction == 0 || (pidProfile()->land_direction < 0 
+            && (reason == NAV_HOME_RESET || (reason == NAV_HOME_MIN_RTH && !STATE(FIXED_WING))))) {
+            posControl.homePosition.yaw = yaw;
+        } else {
+            posControl.homePosition.yaw = DEGREES_TO_CENTIDEGREES(ABS(pidProfile()->land_direction) % 360);
+        }
         if (homeFlags & NAV_HOME_VALID_HEADING) {
             posControl.homeFlags |= NAV_HOME_VALID_HEADING;
         } else {
@@ -2133,7 +2151,7 @@ void updateHomePosition(void)
                     break;
             }
             if (setHome) {
-                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, navigationActualStateHomeValidity());
+                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, navigationActualStateHomeValidity(), NAV_HOME_DISARM);
             }
         }
     }
@@ -2144,7 +2162,7 @@ void updateHomePosition(void)
         if (IS_RC_MODE_ACTIVE(BOXHOMERESET)) {
             if (isHomeResetAllowed && !FLIGHT_MODE(FAILSAFE_MODE) && !FLIGHT_MODE(NAV_RTH_MODE) && !FLIGHT_MODE(NAV_WP_MODE) && (posControl.flags.estPosStatus >= EST_USABLE)) {
                 const navSetWaypointFlags_t homeUpdateFlags = STATE(GPS_FIX_HOME) ? (NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING) : (NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING);
-                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, homeUpdateFlags, navigationActualStateHomeValidity());
+                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, homeUpdateFlags, navigationActualStateHomeValidity(), NAV_HOME_RESET);
                 isHomeResetAllowed = false;
             }
         }
@@ -2368,93 +2386,8 @@ static void resetPositionController(void)
     }
     else {
         resetMulticopterPositionController();
+        resetMulticopterBrakingMode();
     }
-}
-
-
-static void processBrakingMode(const bool isAdjusting)
-{
-#ifdef USE_MR_BRAKING_MODE
-
-    static uint32_t brakingModeDisengageAt = 0;
-    static uint32_t brakingBoostModeDisengageAt = 0;
-
-    const bool brakingEntryAllowed =
-        IS_RC_MODE_ACTIVE(BOXBRAKING) &&
-        !STATE(NAV_CRUISE_BRAKING_LOCKED) &&
-        posControl.actualState.velXY > navConfig()->mc.braking_speed_threshold &&
-        !isAdjusting &&
-        navConfig()->general.flags.user_control_mode == NAV_GPS_CRUISE &&
-        navConfig()->mc.braking_speed_threshold > 0 &&
-        (
-            NAV_Status.state == MW_NAV_STATE_NONE ||
-            NAV_Status.state == MW_NAV_STATE_HOLD_INFINIT
-        );
-
-
-    /*
-        * Case one, when we order to brake (sticks to the center) and we are moving above threshold
-        * Speed is above 1m/s and sticks are centered
-        * Extra condition: BRAKING flight mode has to be enabled
-        */
-    if (brakingEntryAllowed) {
-        /*
-            * Set currnt position and target position
-            * Enabling NAV_CRUISE_BRAKING locks other routines from setting position!
-            */
-        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, 0, NAV_POS_UPDATE_XY);
-
-        ENABLE_STATE(NAV_CRUISE_BRAKING_LOCKED);
-        ENABLE_STATE(NAV_CRUISE_BRAKING);
-
-        //Set forced BRAKING disengage moment
-        brakingModeDisengageAt = millis() + navConfig()->mc.braking_timeout;
-
-        //If speed above threshold, start boost mode as well
-        if (posControl.actualState.velXY > navConfig()->mc.braking_boost_speed_threshold) {
-            ENABLE_STATE(NAV_CRUISE_BRAKING_BOOST);
-
-            brakingBoostModeDisengageAt = millis() + navConfig()->mc.braking_boost_timeout;
-        }
-
-    }
-
-    // We can enter braking only after user started to move the sticks
-    if (STATE(NAV_CRUISE_BRAKING_LOCKED) && isAdjusting) {
-        DISABLE_STATE(NAV_CRUISE_BRAKING_LOCKED);
-    }
-
-    /*
-     * Case when speed dropped, disengage BREAKING_BOOST
-     */
-    if (
-        STATE(NAV_CRUISE_BRAKING_BOOST) && (
-            posControl.actualState.velXY <= navConfig()->mc.braking_boost_disengage_speed ||
-            brakingBoostModeDisengageAt < millis()
-    )) {
-        DISABLE_STATE(NAV_CRUISE_BRAKING_BOOST);
-    }
-
-    /*
-     * Case when we were braking but copter finally stopped or we started to move the sticks
-     */
-    if (STATE(NAV_CRUISE_BRAKING) && (
-        posControl.actualState.velXY <= navConfig()->mc.braking_disengage_speed ||  //We stopped
-        isAdjusting ||                                                              //Moved the sticks
-        brakingModeDisengageAt < millis()                                           //Braking is done to timed disengage
-    )) {
-        DISABLE_STATE(NAV_CRUISE_BRAKING);
-        DISABLE_STATE(NAV_CRUISE_BRAKING_BOOST);
-
-        /*
-            * When braking is done, store current position as desired one
-            * We do not want to go back to the place where braking has started
-            */
-        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, 0, NAV_POS_UPDATE_XY);
-    }
-#else
-    UNUSED(isAdjusting);
-#endif
 }
 
 static bool adjustPositionFromRCInput(void)
@@ -2468,8 +2401,6 @@ static bool adjustPositionFromRCInput(void)
 
         const int16_t rcPitchAdjustment = applyDeadband(rcCommand[PITCH], rcControlsConfig()->pos_hold_deadband);
         const int16_t rcRollAdjustment = applyDeadband(rcCommand[ROLL], rcControlsConfig()->pos_hold_deadband);
-
-        processBrakingMode(rcPitchAdjustment || rcRollAdjustment);
 
         retValue = adjustMulticopterPositionFromRCInput(rcPitchAdjustment, rcRollAdjustment);
     }
@@ -2538,7 +2469,7 @@ void setWaypoint(uint8_t wpNumber, const navWaypoint_t * wpData)
     if ((wpNumber == 0) && ARMING_FLAG(ARMED) && (posControl.flags.estPosStatus >= EST_USABLE) && posControl.gpsOrigin.valid && posControl.flags.isGCSAssistedNavigationEnabled) {
         // Forcibly set home position. Note that this is only valid if already armed, otherwise home will be reset instantly
         geoConvertGeodeticToLocal(&wpPos.pos, &posControl.gpsOrigin, &wpLLH, GEO_ALT_RELATIVE);
-        setHomePosition(&wpPos.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL);
+        setHomePosition(&wpPos.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL, NAV_HOME_WP);
     }
     // WP #255 - special waypoint - directly set desiredPosition
     // Only valid when armed and in poshold mode
@@ -2726,8 +2657,15 @@ static void processNavigationRCAdjustments(void)
         posControl.flags.isAdjustingAltitude = false;
     }
 
-    if ((navStateFlags & NAV_RC_POS) && (!FLIGHT_MODE(FAILSAFE_MODE))) {
-        posControl.flags.isAdjustingPosition = adjustPositionFromRCInput();
+    if (navStateFlags & NAV_RC_POS) {
+        if (!FLIGHT_MODE(FAILSAFE_MODE)) {
+            posControl.flags.isAdjustingPosition = adjustPositionFromRCInput();
+        }
+        else {
+            if (!STATE(FIXED_WING)) {
+                resetMulticopterBrakingMode();
+            }
+        }
     }
     else {
         posControl.flags.isAdjustingPosition = false;
@@ -3223,7 +3161,10 @@ bool navigationRTHAllowsLanding(void)
 {
     navRTHAllowLanding_e allow = navConfig()->general.flags.rth_allow_landing;
     return allow == NAV_RTH_ALLOW_LANDING_ALWAYS ||
-        (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE));
+           allow == NAV_RTH_ALLOW_LANDING_APROACH ||
+          (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE)) ||
+          (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY_APR && FLIGHT_MODE(FAILSAFE_MODE)) ||
+           allow == NAV_RTH_ALLOW_LANDING_FS_NO_APR;
 }
 
 bool isNavLaunchEnabled(void)
@@ -3311,7 +3252,7 @@ void onNewGPSData(void)
         GPS_home.alt = gpsSol.llh.alt;
         GPS_distanceToHome = 0;
         GPS_directionToHome = 0;
-        GPS_scaleLonDown = cos_approx((ABS((float)gpsSol.llh.lat) / 10000000.0f) * 0.0174532925f);
+        GPS_scaleLonDown = cos_approx((fabsf((float)gpsSol.llh.lat) / 10000000.0f) * 0.0174532925f);
     }
 }
 
