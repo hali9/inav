@@ -1063,7 +1063,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_INITIALIZE(navigati
 
         // If close to home - reset home position and land
         if (posControl.homeDistance < navConfig()->general.min_rth_distance) {
-            setHomePosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL);
+            setHomePosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL, NAV_HOME_MIN_RTH);
             setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING);
 
             return NAV_FSM_EVENT_SWITCH_TO_RTH_LANDING;   // NAV_STATE_RTH_HOVER_PRIOR_TO_LANDING
@@ -1875,13 +1875,15 @@ void updateActualHeading(bool headingValid, int32_t newHeading)
     if (newEstHeading >= EST_USABLE && posControl.flags.estHeadingStatus < EST_USABLE &&
         (posControl.homeFlags & (NAV_HOME_VALID_XY | NAV_HOME_VALID_Z)) &&
         (posControl.homeFlags & NAV_HOME_VALID_HEADING) == 0) {
-
-        // Home was stored using the fake heading (assuming boot as 0deg). Calculate
-        // the offset from the fake to the actual yaw and apply the same rotation
-        // to the home point.
-        int32_t fakeToRealYawOffset = newHeading - posControl.actualState.yaw;
-
-        posControl.homePosition.yaw += fakeToRealYawOffset;
+        if (pidProfile()->land_direction == 0) {
+            // Home was stored using the fake heading (assuming boot as 0deg). Calculate
+            // the offset from the fake to the actual yaw and apply the same rotation
+            // to the home point.
+            int32_t fakeToRealYawOffset = newHeading - posControl.actualState.yaw;
+            posControl.homePosition.yaw += fakeToRealYawOffset;
+        } else {
+            posControl.homePosition.yaw = DEGREES_TO_CENTIDEGREES(ABS(pidProfile()->land_direction));
+        }
         if (posControl.homePosition.yaw < 0) {
             posControl.homePosition.yaw += DEGREES_TO_CENTIDEGREES(360);
         }
@@ -2063,7 +2065,7 @@ bool validateRTHSanityChecker(void)
 /*-----------------------------------------------------------
  * Reset home position to current position
  *-----------------------------------------------------------*/
-void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags)
+void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags, navigationHomeReason_t reason)
 {
     // XY-position
     if ((useMask & NAV_POS_UPDATE_XY) != 0) {
@@ -2089,7 +2091,12 @@ void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t
     // Heading
     if ((useMask & NAV_POS_UPDATE_HEADING) != 0) {
         // Heading
-        posControl.homePosition.yaw = yaw;
+        if (pidProfile()->land_direction == 0 || (pidProfile()->land_direction < 0 
+            && (reason == NAV_HOME_RESET || (reason == NAV_HOME_MIN_RTH && !STATE(FIXED_WING))))) {
+            posControl.homePosition.yaw = yaw;
+        } else {
+            posControl.homePosition.yaw = DEGREES_TO_CENTIDEGREES(ABS(pidProfile()->land_direction) % 360);
+        }
         if (homeFlags & NAV_HOME_VALID_HEADING) {
             posControl.homeFlags |= NAV_HOME_VALID_HEADING;
         } else {
@@ -2144,7 +2151,7 @@ void updateHomePosition(void)
                     break;
             }
             if (setHome) {
-                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, navigationActualStateHomeValidity());
+                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, navigationActualStateHomeValidity(), NAV_HOME_DISARM);
             }
         }
     }
@@ -2155,7 +2162,7 @@ void updateHomePosition(void)
         if (IS_RC_MODE_ACTIVE(BOXHOMERESET)) {
             if (isHomeResetAllowed && !FLIGHT_MODE(FAILSAFE_MODE) && !FLIGHT_MODE(NAV_RTH_MODE) && !FLIGHT_MODE(NAV_WP_MODE) && (posControl.flags.estPosStatus >= EST_USABLE)) {
                 const navSetWaypointFlags_t homeUpdateFlags = STATE(GPS_FIX_HOME) ? (NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING) : (NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING);
-                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, homeUpdateFlags, navigationActualStateHomeValidity());
+                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, homeUpdateFlags, navigationActualStateHomeValidity(), NAV_HOME_RESET);
                 isHomeResetAllowed = false;
             }
         }
@@ -2462,7 +2469,7 @@ void setWaypoint(uint8_t wpNumber, const navWaypoint_t * wpData)
     if ((wpNumber == 0) && ARMING_FLAG(ARMED) && (posControl.flags.estPosStatus >= EST_USABLE) && posControl.gpsOrigin.valid && posControl.flags.isGCSAssistedNavigationEnabled) {
         // Forcibly set home position. Note that this is only valid if already armed, otherwise home will be reset instantly
         geoConvertGeodeticToLocal(&wpPos.pos, &posControl.gpsOrigin, &wpLLH, GEO_ALT_RELATIVE);
-        setHomePosition(&wpPos.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL);
+        setHomePosition(&wpPos.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL, NAV_HOME_WP);
     }
     // WP #255 - special waypoint - directly set desiredPosition
     // Only valid when armed and in poshold mode
