@@ -2578,6 +2578,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
         mixerConfigMutable()->appliedMixerPreset = sbufReadU16(src);
         sbufReadU8(src); //Read and ignore MAX_SUPPORTED_MOTORS
         sbufReadU8(src); //Read and ignore MAX_SUPPORTED_SERVOS
+        mixerConfigMutable()->hasSpoilers = sbufReadU8(src);
         mixerUpdateStateFlags();
         break;
 
