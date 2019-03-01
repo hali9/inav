@@ -85,6 +85,7 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT + 1] = {
     { BOXUSER1, "USER1", 47 },
     { BOXUSER2, "USER2", 48 },
     { BOXLOITERDIRCHN, "LOITER CHANGE", 49 },
+    { BOXSPOILERON, "SPOILERON", 50 },
     { CHECKBOX_ITEM_COUNT, NULL, 0xFF }
 };
 
@@ -234,13 +235,16 @@ void initActiveBoxIds(void)
     }
 
     /*
-     * FLAPERON mode active only in case of airplane and custom airplane. Activating on
+     * FLAPERON and SPOILERON mode active only in case of airplane and custom airplane. Activating on
      * flying wing can cause bad thing
      */
     if (STATE(FLAPERON_AVAILABLE)) {
         activeBoxIds[activeBoxIdCount++] = BOXFLAPERON;
     }
-
+    if (STATE(SPOILERON_AVAILABLE)) {
+        activeBoxIds[activeBoxIdCount++] = BOXSPOILERON;
+    }
+    
     activeBoxIds[activeBoxIdCount++] = BOXBEEPERON;
 
 #ifdef USE_LIGHTS
@@ -330,6 +334,7 @@ void packBoxModeFlags(boxBitmask_t * mspBoxModeFlags)
     CHECK_ACTIVE_BOX(IS_ENABLED(IS_RC_MODE_ACTIVE(BOXGCSNAV)),      BOXGCSNAV);
 #ifdef USE_FLM_FLAPERON
     CHECK_ACTIVE_BOX(IS_ENABLED(FLIGHT_MODE(FLAPERON)),             BOXFLAPERON);
+    CHECK_ACTIVE_BOX(IS_ENABLED(FLIGHT_MODE(SPOILERON)),             BOXSPOILERON);
 #endif
     CHECK_ACTIVE_BOX(IS_ENABLED(FLIGHT_MODE(TURN_ASSISTANT)),       BOXTURNASSIST);
     CHECK_ACTIVE_BOX(IS_ENABLED(FLIGHT_MODE(NAV_LAUNCH_MODE)),      BOXNAVLAUNCH);
