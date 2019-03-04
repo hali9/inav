@@ -623,7 +623,7 @@ groups:
         field: platformType
         type: uint8_t
         table: platform_type
-      - name: has_Spoilers
+      - name: has_spoilers
         field: hasSpoilers
         type: bool
       - name: has_flaps
