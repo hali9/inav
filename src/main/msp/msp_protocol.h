@@ -92,6 +92,7 @@
 #define CAP_FLAPS                   ((uint32_t)1 << 3)
 #define CAP_NAVCAP                  ((uint32_t)1 << 4)
 #define CAP_EXTAUX                  ((uint32_t)1 << 5)
+#define CAP_SPOILERS                ((uint32_t)1 << 6)
 
 #define MSP_API_VERSION                 1    //out message
 #define MSP_FC_VARIANT                  2    //out message
