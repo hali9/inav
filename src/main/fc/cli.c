@@ -1251,7 +1251,7 @@ static void cliTempSensor(char *cmdline)
 static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, const navWaypoint_t *defaultNavWaypoint)
 {
     const char *format = "wp %u %u %d %d %d %d %u"; //uint8_t action; int32_t lat; int32_t lon; int32_t alt; int16_t p1; uint8_t flag
-    for (uint8_t i = 0; i < MAX_TEMP_SENSORS; i++) {
+    for (uint8_t i = 0; i < NAV_MAX_WAYPOINTS; i++) {
         bool equalsDefault = false;
         if (defaultTempSensorConfigs) {
             equalsDefault = navWaypoint[i].action == defaultNavWaypoint[i].action
@@ -1284,7 +1284,68 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
 
 static void cliWaypoints(char *cmdline)
 {
-
+    if (isEmpty(cmdline)) {
+        printTempSensor(DUMP_MASTER, nonVolatileWaypointList(0), NULL);
+    } else if (sl_strcasecmp(cmdline, "reset") == 0) {
+        resetWaypointList();
+    } else if (sl_strcasecmp(cmdline, "load") == 0) {
+        loadNonVolatileWaypointList();
+    } else if (sl_strcasecmp(cmdline, "save") == 0) {
+        saveNonVolatileWaypointList();
+    } else {
+        int16_t i, p1;
+        uint8_t action, flag;
+        int32_t lat, lon, alt;
+        uint8_t validArgumentCount = 0;
+        i = fastA2I(ptr);
+        if (i >= 0 && i < NAV_MAX_WAYPOINTS) {
+            ptr = nextArg(ptr);
+            if (ptr) {
+                action = fastA2I(ptr);
+                validArgumentCount++;
+            }
+            ptr = nextArg(ptr);
+            if (ptr) {
+                lat = fastA2I(ptr);
+                validArgumentCount++;
+            }
+            ptr = nextArg(ptr);
+            if (ptr) {
+                lon = fastA2I(ptr);
+                validArgumentCount++;
+            }
+            ptr = nextArg(ptr);
+            if (ptr) {
+                alt = fastA2I(ptr);
+                validArgumentCount++;
+            }
+            ptr = nextArg(ptr);
+            if (ptr) {
+                p1 = fastA2I(ptr);
+                validArgumentCount++;
+            }
+            ptr = nextArg(ptr);
+            if (ptr) {
+                flag = fastA2I(ptr);
+                validArgumentCount++;
+            }
+            if (validArgumentCount < 4) {
+                cliShowParseError();
+            } else if (!(action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH) || (p1 < 0) || !(flag == 0 || flag == NAV_WP_FLAG_LAST)) {
+                cliShowParseError();
+            } else {
+                navWaypoint_t *navWaypoint = nonVolatileWaypointListMutable(i);
+                navWaypoint->action = action;
+                navWaypoint->lat = lat;
+                navWaypoint->lon = lon;
+                navWaypoint->alt = alt;
+                navWaypoint->p1 = p1;
+                navWaypoint->flag = flag;
+            }
+        } else {
+            cliShowArgumentRangeError("wp index", 0, NAV_MAX_WAYPOINTS - 1);
+        }
+    }
 }
 
 #endif
