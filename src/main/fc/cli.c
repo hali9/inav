@@ -1285,7 +1285,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
 static void cliWaypoints(char *cmdline)
 {
     if (isEmpty(cmdline)) {
-        printTempSensor(DUMP_MASTER, nonVolatileWaypointList(0), NULL);
+        printWaypoints(DUMP_MASTER, nonVolatileWaypointList(0), NULL);
     } else if (sl_strcasecmp(cmdline, "reset") == 0) {
         resetWaypointList();
     } else if (sl_strcasecmp(cmdline, "load") == 0) {
@@ -1341,6 +1341,9 @@ static void cliWaypoints(char *cmdline)
                 navWaypoint->alt = alt;
                 navWaypoint->p1 = p1;
                 navWaypoint->flag = flag;
+//posControl.waypointList[wpNumber - 1] = *wpData;
+//posControl.waypointCount = wpNumber;
+//posControl.waypointListValid = (wpData->flag == NAV_WP_FLAG_LAST);
             }
         } else {
             cliShowArgumentRangeError("wp index", 0, NAV_MAX_WAYPOINTS - 1);
