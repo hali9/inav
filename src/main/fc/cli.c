@@ -1247,6 +1247,48 @@ static void cliTempSensor(char *cmdline)
 }
 #endif
 
+#if defined(USE_NAV) && defined(NAV_NON_VOLATILE_WAYPOINT_STORAGE)
+static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, const navWaypoint_t *defaultNavWaypoint)
+{
+    const char *format = "wp %u %u %d %d %d %d %u"; //uint8_t action; int32_t lat; int32_t lon; int32_t alt; int16_t p1; uint8_t flag
+    for (uint8_t i = 0; i < MAX_TEMP_SENSORS; i++) {
+        bool equalsDefault = false;
+        if (defaultTempSensorConfigs) {
+            equalsDefault = navWaypoint[i].action == defaultNavWaypoint[i].action
+                && navWaypoint[i].lat == defaultNavWaypoint[i].lat
+                && navWaypoint[i].lon, defaultNavWaypoint[i].lon
+                && navWaypoint[i].alt == defaultNavWaypoint[i].alt
+                && navWaypoint[i].p1 == defaultNavWaypoint[i].p1
+                && navWaypoint[i].flag == defaultNavWaypoint[i].flag;
+            cliDefaultPrintLinef(dumpMask, equalsDefault, format,
+                i,
+                defaultNavWaypoint[i].action,
+                defaultNavWaypoint[i].lat,
+                defaultNavWaypoint[i].lon,
+                defaultNavWaypoint[i].alt,
+                defaultNavWaypoint[i].p1,
+                defaultNavWaypoint[i].flag
+            );
+        }
+        cliDumpPrintLinef(dumpMask, equalsDefault, format,
+            i,
+            navWaypoint[i].action,
+            navWaypoint[i].lat,
+            navWaypoint[i].lon,
+            navWaypoint[i].alt,
+            navWaypoint[i].p1,
+            navWaypoint[i].flag
+        );
+    }
+}
+
+static void cliWaypoints(char *cmdline)
+{
+
+}
+
+#endif
+
 #ifdef USE_LED_STRIP
 static void printLed(uint8_t dumpMask, const ledConfig_t *ledConfigs, const ledConfig_t *defaultLedConfigs)
 {
@@ -2764,6 +2806,11 @@ static void printConfig(const char *cmdline, bool doDiff)
         printTempSensor(dumpMask, tempSensorConfig_CopyArray, tempSensorConfig(0));
 #endif
 
+#if defined(USE_NAV) && defined(NAV_NON_VOLATILE_WAYPOINT_STORAGE)
+        cliPrintHashLine("wp");
+        printWaypoints(dumpMask, nonVolatileWaypointList_CopyArray, nonVolatileWaypointList(0));
+#endif
+
 #ifdef USE_OSD
         cliPrintHashLine("osd_layout");
         printOsdLayout(dumpMask, &osdConfig_Copy, osdConfig(), -1, -1);
@@ -2928,6 +2975,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("temp_sensor", "change temp sensor settings", NULL, cliTempSensor),
 #endif
     CLI_COMMAND_DEF("version", "show version", NULL, cliVersion),
+#if defined(USE_NAV) && defined(NAV_NON_VOLATILE_WAYPOINT_STORAGE)
+    CLI_COMMAND_DEF("wp", "waypoint list", NULL, cliWaypoints),
+#endif
 #ifdef USE_OSD
     CLI_COMMAND_DEF("osd_layout", "get or set the layout of OSD items", "[<layout> [<item> [<col> <row> [<visible>]]]]", cliOsdLayout),
 #endif
