@@ -1350,12 +1350,12 @@ static void cliWaypoints(char *cmdline)
             } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH) || (p1 < 0) || !(flag == 0 || flag == NAV_WP_FLAG_LAST)) {
                 cliShowParseError();
             } else {
-                navWaypoint->action = action;
-                navWaypoint->lat = lat;
-                navWaypoint->lon = lon;
-                navWaypoint->alt = alt;
-                navWaypoint->p1 = p1;
-                navWaypoint->flag = flag;
+                posControl.waypointList[i].action = action;
+                posControl.waypointList[i].lat = lat;
+                posControl.waypointList[i].lon = lon;
+                posControl.waypointList[i].alt = alt;
+                posControl.waypointList[i].p1 = p1;
+                posControl.waypointList[i].flag = flag;
             }
         } else {
             cliShowArgumentRangeError("wp index", 0, NAV_MAX_WAYPOINTS - 1);
