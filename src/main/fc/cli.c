@@ -91,6 +91,7 @@ extern uint8_t __config_end;
 #include "io/serial.h"
 
 #include "navigation/navigation.h"
+#include "navigation/navigation_private.h"
 
 #include "rx/rx.h"
 #include "rx/spektrum.h"
@@ -1250,13 +1251,14 @@ static void cliTempSensor(char *cmdline)
 #if defined(USE_NAV) && defined(NAV_NON_VOLATILE_WAYPOINT_STORAGE)
 static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, const navWaypoint_t *defaultNavWaypoint)
 {
+    cliPrintLinef("#wp %d %svalid", posControl.waypointCount, posControl.waypointListValid ? "" : "in"); //int8_t bool
     const char *format = "wp %u %u %d %d %d %d %u"; //uint8_t action; int32_t lat; int32_t lon; int32_t alt; int16_t p1; uint8_t flag
     for (uint8_t i = 0; i < NAV_MAX_WAYPOINTS; i++) {
         bool equalsDefault = false;
-        if (defaultTempSensorConfigs) {
+        if (defaultNavWaypoint) {
             equalsDefault = navWaypoint[i].action == defaultNavWaypoint[i].action
                 && navWaypoint[i].lat == defaultNavWaypoint[i].lat
-                && navWaypoint[i].lon, defaultNavWaypoint[i].lon
+                && navWaypoint[i].lon == defaultNavWaypoint[i].lon
                 && navWaypoint[i].alt == defaultNavWaypoint[i].alt
                 && navWaypoint[i].p1 == defaultNavWaypoint[i].p1
                 && navWaypoint[i].flag == defaultNavWaypoint[i].flag;
@@ -1285,18 +1287,32 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
 static void cliWaypoints(char *cmdline)
 {
     if (isEmpty(cmdline)) {
-        printWaypoints(DUMP_MASTER, nonVolatileWaypointList(0), NULL);
+        printWaypoints(DUMP_MASTER, posControl.waypointList, NULL);
     } else if (sl_strcasecmp(cmdline, "reset") == 0) {
         resetWaypointList();
     } else if (sl_strcasecmp(cmdline, "load") == 0) {
         loadNonVolatileWaypointList();
     } else if (sl_strcasecmp(cmdline, "save") == 0) {
-        saveNonVolatileWaypointList();
+        posControl.waypointListValid = false;
+        for (int i = 0; i < NAV_MAX_WAYPOINTS; i++) {
+            if (!(posControl.waypointList[i].action == NAV_WP_ACTION_WAYPOINT || posControl.waypointList[i].action == NAV_WP_ACTION_RTH)) break;
+            if (posControl.waypointList[i].flag == NAV_WP_FLAG_LAST) {
+                posControl.waypointCount = i + 1;
+                posControl.waypointListValid = true;
+                break;
+            }
+        }
+        if (posControl.waypointListValid) {
+            saveNonVolatileWaypointList();
+        } else {
+            cliShowParseError();
+        }
     } else {
         int16_t i, p1;
         uint8_t action, flag;
         int32_t lat, lon, alt;
         uint8_t validArgumentCount = 0;
+        const char *ptr = cmdline;
         i = fastA2I(ptr);
         if (i >= 0 && i < NAV_MAX_WAYPOINTS) {
             ptr = nextArg(ptr);
@@ -1331,19 +1347,15 @@ static void cliWaypoints(char *cmdline)
             }
             if (validArgumentCount < 4) {
                 cliShowParseError();
-            } else if (!(action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH) || (p1 < 0) || !(flag == 0 || flag == NAV_WP_FLAG_LAST)) {
+            } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH) || (p1 < 0) || !(flag == 0 || flag == NAV_WP_FLAG_LAST)) {
                 cliShowParseError();
             } else {
-                navWaypoint_t *navWaypoint = nonVolatileWaypointListMutable(i);
                 navWaypoint->action = action;
                 navWaypoint->lat = lat;
                 navWaypoint->lon = lon;
                 navWaypoint->alt = alt;
                 navWaypoint->p1 = p1;
                 navWaypoint->flag = flag;
-//posControl.waypointList[wpNumber - 1] = *wpData;
-//posControl.waypointCount = wpNumber;
-//posControl.waypointListValid = (wpData->flag == NAV_WP_FLAG_LAST);
             }
         } else {
             cliShowArgumentRangeError("wp index", 0, NAV_MAX_WAYPOINTS - 1);
@@ -2872,7 +2884,7 @@ static void printConfig(const char *cmdline, bool doDiff)
 
 #if defined(USE_NAV) && defined(NAV_NON_VOLATILE_WAYPOINT_STORAGE)
         cliPrintHashLine("wp");
-        printWaypoints(dumpMask, nonVolatileWaypointList_CopyArray, nonVolatileWaypointList(0));
+        printWaypoints(dumpMask, posControl.waypointList, nonVolatileWaypointListMutable(0));
 #endif
 
 #ifdef USE_OSD
