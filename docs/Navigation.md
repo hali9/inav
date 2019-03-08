@@ -55,13 +55,23 @@ When deciding what altitude to maintain, RTH has 4 different modes of operation 
 ### CLI parameters for NAV WP
 
 `wp` - List all waypoints.
+
 `wp load` - Load list of waypoint from EEPROM to FC.
+
 `wp <n> <action> <lat> <lon> <alt> <p1> <flag>` - Set waypoint with index `<n>`.
+
   `<action>` - When 0 then waypoint is not used, when 1 then it is normal waypoint, when 4 then it is RTH.
+  
   `<lat>` - Latitude (WGS84), in degrees * 1E7 (for example 123456789 means 12.3456789).
+  
   `<lon>` - Longitude.
+  
   `<alt>` - Altitude in cm.
+  
   `<p1>` - When action is RTH and p1 > 0 alow landing. When action is waypoint it means speed to this waypoint, is taken into account only for multicopter and when > 50 and < nav_auto_speed.
+  
   `<flag>` - Last waypoint must have set `flag` to 165 (0xA5), oterwise 0.
+  
 `wp save` - Checks list of waypoint and save from FC to EEPROM (warning: it also saves all unsaved CLI parametr like normal `save`).
+
 `wp reset` - Resets the list, sets the waypoints number to 0 and mark it as invalid (but not clear waypoint).
