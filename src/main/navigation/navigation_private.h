@@ -341,6 +341,7 @@ typedef struct {
 
     navWaypointPosition_t       activeWaypoint;     // Local position and initial bearing, filled on waypoint activation
     int8_t                      activeWaypointIndex;
+    uint32_t                    lastWaypointReachedAt;
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];
@@ -374,6 +375,7 @@ void updateClimbRateToAltitudeController(float desiredClimbRate, climbRateToAlti
 
 bool isWaypointReached(const navWaypointPosition_t * waypoint, const bool isWaypointHome);
 bool isWaypointMissed(const navWaypointPosition_t * waypoint);
+bool isWaypointWait(void);
 bool isApproachingLastWaypoint(void);
 float getActiveWaypointSpeed(void);
 
