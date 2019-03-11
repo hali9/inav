@@ -178,27 +178,28 @@ typedef enum {
     NAV_PERSISTENT_ID_WAYPOINT_INITIALIZE                       = 15,
     NAV_PERSISTENT_ID_WAYPOINT_PRE_ACTION                       = 16,
     NAV_PERSISTENT_ID_WAYPOINT_IN_PROGRESS                      = 17,
-    NAV_PERSISTENT_ID_WAYPOINT_REACHED                          = 18,
-    NAV_PERSISTENT_ID_WAYPOINT_NEXT                             = 19,
-    NAV_PERSISTENT_ID_WAYPOINT_FINISHED                         = 20,
-    NAV_PERSISTENT_ID_WAYPOINT_RTH_LAND                         = 21,
+    NAV_PERSISTENT_ID_WAYPOINT_WAIT                             = 18,
+    NAV_PERSISTENT_ID_WAYPOINT_REACHED                          = 19,
+    NAV_PERSISTENT_ID_WAYPOINT_NEXT                             = 20,
+    NAV_PERSISTENT_ID_WAYPOINT_FINISHED                         = 21,
+    NAV_PERSISTENT_ID_WAYPOINT_RTH_LAND                         = 22,
 
-    NAV_PERSISTENT_ID_EMERGENCY_LANDING_INITIALIZE              = 22,
-    NAV_PERSISTENT_ID_EMERGENCY_LANDING_IN_PROGRESS             = 23,
-    NAV_PERSISTENT_ID_EMERGENCY_LANDING_FINISHED                = 24,
+    NAV_PERSISTENT_ID_EMERGENCY_LANDING_INITIALIZE              = 23,
+    NAV_PERSISTENT_ID_EMERGENCY_LANDING_IN_PROGRESS             = 24,
+    NAV_PERSISTENT_ID_EMERGENCY_LANDING_FINISHED                = 25,
 
-    NAV_PERSISTENT_ID_LAUNCH_INITIALIZE                         = 25,
-    NAV_PERSISTENT_ID_LAUNCH_WAIT                               = 26,
-    NAV_PERSISTENT_ID_UNUSED_3                                  = 27, // was NAV_STATE_LAUNCH_MOTOR_DELAY
-    NAV_PERSISTENT_ID_LAUNCH_IN_PROGRESS                        = 28,
+    NAV_PERSISTENT_ID_LAUNCH_INITIALIZE                         = 26,
+    NAV_PERSISTENT_ID_LAUNCH_WAIT                               = 27,
+    NAV_PERSISTENT_ID_UNUSED_3                                  = 28, // was NAV_STATE_LAUNCH_MOTOR_DELAY
+    NAV_PERSISTENT_ID_LAUNCH_IN_PROGRESS                        = 29,
 
-    NAV_PERSISTENT_ID_CRUISE_2D_INITIALIZE                      = 29,
-    NAV_PERSISTENT_ID_CRUISE_2D_IN_PROGRESS                     = 30,
-    NAV_PERSISTENT_ID_CRUISE_2D_ADJUSTING                       = 31,
+    NAV_PERSISTENT_ID_CRUISE_2D_INITIALIZE                      = 30,
+    NAV_PERSISTENT_ID_CRUISE_2D_IN_PROGRESS                     = 31,
+    NAV_PERSISTENT_ID_CRUISE_2D_ADJUSTING                       = 32,
 
-    NAV_PERSISTENT_ID_CRUISE_3D_INITIALIZE                      = 32,
-    NAV_PERSISTENT_ID_CRUISE_3D_IN_PROGRESS                     = 33,
-    NAV_PERSISTENT_ID_CRUISE_3D_ADJUSTING                       = 34,
+    NAV_PERSISTENT_ID_CRUISE_3D_INITIALIZE                      = 33,
+    NAV_PERSISTENT_ID_CRUISE_3D_IN_PROGRESS                     = 34,
+    NAV_PERSISTENT_ID_CRUISE_3D_ADJUSTING                       = 35,
 } navigationPersistentId_e;
 
 typedef enum {
@@ -224,6 +225,7 @@ typedef enum {
     NAV_STATE_WAYPOINT_INITIALIZE,
     NAV_STATE_WAYPOINT_PRE_ACTION,
     NAV_STATE_WAYPOINT_IN_PROGRESS,
+    NAV_STATE_WAYPOINT_WAIT,
     NAV_STATE_WAYPOINT_REACHED,
     NAV_STATE_WAYPOINT_NEXT,
     NAV_STATE_WAYPOINT_FINISHED,
