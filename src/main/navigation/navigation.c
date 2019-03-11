@@ -1393,7 +1393,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
             default:
                 if (isWaypointReached(&posControl.activeWaypoint, isDoingRTH) || isWaypointMissed(&posControl.activeWaypoint)) {
                     // Waypoint reached
-					posControl.lastWaypointReachedAt = millis();
+                    posControl.lastWaypointReachedAt = millis();
                     return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_WAIT
                 }
                 else {
@@ -1413,6 +1413,18 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
     }
 }
 
+static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_WAIT(navigationFSMState_t previousState)
+{
+    UNUSED(previousState);
+
+    uint32_t wait = posControl.waypointList[posControl.activeWaypointIndex].p2 > 0 ? posControl.waypointList[posControl.activeWaypointIndex].p2 : 0;
+    if ((millis() - posControl.lastWaypointReachedAt) / 1000000 >= wait) {
+        return NAV_FSM_EVENT_SUCCESS;   // NAV_STATE_WAYPOINT_NEXT
+    } else {
+        return NAV_FSM_EVENT_NONE;
+    }
+}
+
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(navigationFSMState_t previousState)
 {
     UNUSED(previousState);
@@ -1428,18 +1440,6 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(naviga
 
         default:
             return NAV_FSM_EVENT_SUCCESS;   // NAV_STATE_WAYPOINT_NEXT
-    }
-}
-
-static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_WAIT(navigationFSMState_t previousState)
-{
-    UNUSED(previousState);
-
-    if ((millis() - posControl.lastWaypointReachedAt) / 1000000 >= posControl.waypointList[posControl.activeWaypointIndex].p2) {
-        return NAV_FSM_EVENT_SUCCESS;   // NAV_STATE_WAYPOINT_NEXT
-    } else {
-        
-        return NAV_FSM_EVENT_NONE;
     }
 }
 
