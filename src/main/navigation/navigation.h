@@ -83,8 +83,20 @@ typedef enum {
 typedef enum {
     NAV_RTH_ALLOW_LANDING_NEVER = 0,
     NAV_RTH_ALLOW_LANDING_ALWAYS = 1,
-    NAV_RTH_ALLOW_LANDING_FS_ONLY = 2, // Allow landing only if RTH was triggered by failsafe
+    NAV_RTH_ALLOW_LANDING_APROACH = 2,
+    NAV_RTH_ALLOW_LANDING_FS_ONLY = 3,     // Allow landing only if RTH was triggered by failsafe
+    NAV_RTH_ALLOW_LANDING_FS_ONLY_APR = 4, // Allow landing with aproach only if RTH was triggered by failsafe
+    NAV_RTH_ALLOW_LANDING_FS_NO_APR = 5,   // Allow landing with aproach, but if RTH was triggered by failsafe land without aproach
 } navRTHAllowLanding_e;
+
+typedef enum {
+    NAV_RTH_APROACH_LANDING_ABOVE_MAXALT = 0, // 0-alt>maxalt
+    NAV_RTH_APROACH_LANDING_MAXALT = 1,       // 1-alt=maxalt angle<>homeYaw+135
+    NAV_RTH_APROACH_LANDING_HOMEYAW135 = 2,   // 2-alt=maxalt angle=homeYaw+135
+    NAV_RTH_APROACH_LANDING_MINALT = 3,       // 3-alt=minalt angle<>homeYaw
+    NAV_RTH_APROACH_LANDING_HOMEYAW = 4,      // 4-alt=minalt angle=homeYaw
+    NAV_RTH_APROACH_LANDING_FINAL = 5,        // 5-final aproach
+} navRTHAproachLanding_e;
 
 typedef struct positionEstimationConfig_s {
     uint8_t automatic_mag_declination;
@@ -167,6 +179,8 @@ typedef struct navConfig_s {
         uint16_t braking_boost_speed_threshold; // Above this speed braking boost mode can engage
         uint16_t braking_boost_disengage_speed; // Below this speed braking boost will disengage
         uint8_t  braking_bank_angle;            // Max angle [deg] that MR is allowed duing braking boost phase
+        uint8_t posDecelerationTime;            // Brake time parameter
+        uint8_t posResponseExpo;                // Position controller expo (taret vel expo for MC)
     } mc;
 
     struct {
@@ -180,6 +194,9 @@ typedef struct navConfig_s {
         uint8_t  pitch_to_throttle;          // Pitch angle (in deg) to throttle gain (in 1/1000's of throttle) (*10)
         uint16_t loiter_radius;              // Loiter radius when executing PH on a fixed wing
         int8_t land_dive_angle;
+        uint16_t land_safe_alt;              // Height from which the last approach is made
+        uint16_t land_motor_off_alt;         // Height of engine shutdown
+        uint16_t land_aproach_distance;      // Distance of final aproach
         uint16_t launch_velocity_thresh;     // Velocity threshold for swing launch detection
         uint16_t launch_accel_thresh;        // Acceleration threshold for launch detection (cm/s/s)
         uint16_t launch_time_thresh;         // Time threshold for launch detection (ms)
@@ -240,6 +257,7 @@ typedef struct {
     float kI;
     float kD;
     float kT;   // Tracking gain (anti-windup)
+    float kFF;  // FeedForward Component
 } pidControllerParam_t;
 
 typedef struct {
@@ -256,6 +274,7 @@ typedef struct {
     float integral;                     // used integral value in output
     float proportional;                 // used proportional value in output
     float derivative;                   // used derivative value in output
+    float feedForward;                  // used FeedForward value in output
     float output_constrained;           // controller output constrained
 } pidController_t;
 
