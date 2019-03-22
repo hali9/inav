@@ -21,8 +21,8 @@
 #include <string.h>
 
 #include "platform.h"
-#include "build/debug.h"
 
+#include "common/log.h"
 #include "common/maths.h"
 
 #include "drivers/io.h"
@@ -113,7 +113,7 @@ static void pwmOutConfigTimer(pwmOutputPort_t * p, TCH_t * tch, uint32_t hz, uin
 static pwmOutputPort_t *pwmOutConfigMotor(const timerHardware_t *timHw, uint32_t hz, uint16_t period, uint16_t value, bool enableOutput)
 {
     if (allocatedOutputPortCount >= MAX_PWM_OUTPUT_PORTS) {
-        DEBUG_TRACE("Attempt to allocate PWM output beyond MAX_PWM_OUTPUT_PORTS");
+        LOG_E(PWM, "Attempt to allocate PWM output beyond MAX_PWM_OUTPUT_PORTS");
         return NULL;
     }
 
@@ -266,8 +266,11 @@ static uint16_t prepareDshotPacket(const uint16_t value, bool requestTelemetry)
     return packet;
 }
 
-void pwmCompleteDshotUpdate(uint8_t motorCount, timeUs_t currentTimeUs)
+void pwmCompleteDshotUpdate(uint8_t motorCount)
 {
+    // Get latest REAL time
+    timeUs_t currentTimeUs = micros();
+
     // Enforce motor update rate
     if (!isProtocolDshot || (dshotMotorUpdateIntervalUs == 0) || ((currentTimeUs - dshotMotorLastUpdateUs) <= dshotMotorUpdateIntervalUs)) {
         return;
@@ -294,7 +297,7 @@ void pwmCompleteDshotUpdate(uint8_t motorCount, timeUs_t currentTimeUs)
     }
 }
 
-bool isMotorProtocolDshot(void)
+bool FAST_CODE NOINLINE isMotorProtocolDshot(void)
 {
     return isProtocolDshot;
 }
