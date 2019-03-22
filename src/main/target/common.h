@@ -99,12 +99,16 @@
 
 #define USE_BOOTLOG
 #define BOOTLOG_DESCRIPTIONS
+
+#define NAV_NON_VOLATILE_WAYPOINT_CLI
+#else // FLASH_SIZE < 256
+#define LOG_LEVEL_MAXIMUM LOG_LEVEL_ERROR
 #endif
 
 #if (FLASH_SIZE > 128)
 #define NAV_FIXED_WING_LANDING
 #define USE_AUTOTUNE_FIXED_WING
-#define USE_DEBUG_TRACE
+#define USE_LOG
 #define USE_STATS
 #define USE_GYRO_NOTCH_1
 #define USE_GYRO_NOTCH_2
@@ -123,6 +127,9 @@
 #define USE_TELEMETRY_MAVLINK
 #define USE_TELEMETRY_SMARTPORT
 #define USE_TELEMETRY_CRSF
+#ifndef STM32F3
+#define USE_TELEMETRY_SIM
+#endif
 #define USE_MSP_OVER_TELEMETRY
 // These are rather exotic serial protocols
 #define USE_RX_MSP
@@ -138,12 +145,17 @@
 #define USE_RCDEVICE
 #define USE_PITOT
 #define USE_PITOT_ADC
+#define USE_PITOT_VIRTUAL
 
 //Enable VTX control
 #define USE_VTX_CONTROL
 #define USE_VTX_SMARTAUDIO
 #define USE_VTX_TRAMP
 #define USE_VTX_FFPV
+
+#ifndef STM32F3 //F3 series does not have enoug RAM to support logic conditions
+#define USE_LOGIC_CONDITIONS
+#endif
 
 //Enable DST calculations
 #define RTC_AUTOMATIC_DST
@@ -154,4 +166,8 @@
 
 #define SKIP_TASK_STATISTICS
 
+#endif
+
+#ifdef STM32F7
+#define USE_ITCM_RAM
 #endif

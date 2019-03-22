@@ -76,7 +76,7 @@ tables:
     values: ["400KHZ", "800KHZ", "100KHZ", "200KHZ"]
   - name: debug_modes
     values: ["NONE", "GYRO", "NOTCH", "NAV_LANDING", "FW_ALTITUDE", "AGL", "FLOW_RAW",
-      "FLOW", "SBUS", "FPORT", "ALWAYS", "STAGE2", "WIND_ESTIMATOR", "SAG_COMP_VOLTAGE",
+      "FLOW", "SBUS", "FPORT", "ALWAYS", "STAGE2", "VIRTUAL_PITOT", "SAG_COMP_VOLTAGE",
       "VIBE", "CRUISE", "REM_FLIGHT_TIME", "SMARTAUDIO", "ACC", "GENERIC"]
   - name: async_mode
     values: ["NONE", "GYRO", "ALL"]
@@ -90,7 +90,7 @@ tables:
     values: ["NONE", "ALTITUDE", "GROUND_SPEED", "HOME_DISTANCE"]
     enum: osd_sidebar_scroll_e
   - name: nav_rth_allow_landing
-    values: ["NEVER", "ALWAYS", "FS_ONLY"]
+    values: ["NEVER", "ALWAYS", "APROACH", "FS_ONLY", "FS_ONLY_APR", "FS_NO_APR"]
     enum: navRTHAllowLanding_e
   - name: bat_capacity_unit
     values: ["MAH", "MWH"]
@@ -110,6 +110,10 @@ tables:
   - name: vtx_low_power_disarm
     values: ["OFF", "ON", "UNTIL_FIRST_ARM"]
     enum: vtxLowerPowerDisarm_e
+  - name: filter_type
+    values: ["PT1", "BIQUAD"]
+  - name: log_level
+    values: ["ERROR", "WARNING", "INFO", "VERBOSE", "DEBUG"]
 
 groups:
   - name: PG_GYRO_CONFIG
@@ -131,6 +135,9 @@ groups:
       - name: gyro_lpf_hz
         field: gyro_soft_lpf_hz
         max: 200
+      - name: gyro_lpf_type
+        field: gyro_soft_lpf_type
+        table: filter_type
       - name: moron_threshold
         field: gyroMovementCalibrationThreshold
         max: 128
@@ -901,7 +908,7 @@ groups:
         min: 0
         max: 200
       - name: fw_ff_pitch
-        field: bank_fw.pid[PID_PITCH].D
+        field: bank_fw.pid[PID_PITCH].FF
         min: 0
         max: 200
       - name: fw_p_roll
@@ -913,7 +920,7 @@ groups:
         min: 0
         max: 200
       - name: fw_ff_roll
-        field: bank_fw.pid[PID_ROLL].D
+        field: bank_fw.pid[PID_ROLL].FF
         min: 0
         max: 200
       - name: fw_p_yaw
@@ -925,7 +932,7 @@ groups:
         min: 0
         max: 200
       - name: fw_ff_yaw
-        field: bank_fw.pid[PID_YAW].D
+        field: bank_fw.pid[PID_YAW].FF
         min: 0
         max: 200
       - name: fw_p_level
@@ -951,6 +958,9 @@ groups:
       - name: dterm_lpf_hz
         min: 0
         max: 200
+      - name: use_dterm_fir_filter
+        field: use_dterm_fir_filter
+        type: bool
       - name: yaw_lpf_hz
         min: 0
         max: 200
@@ -961,6 +971,16 @@ groups:
         field: fixedWingItermThrowLimit
         min: FW_ITERM_THROW_LIMIT_MIN
         max: FW_ITERM_THROW_LIMIT_MAX
+      - name: nav_fw_heading2roll
+        field: heading_to_roll
+        condition: USE_NAV
+        min: 0
+        max: 250		
+      - name: nav_fw_heading2yaw
+        field: heading_to_yaw
+        condition: USE_NAV
+        min: -125
+        max: 125
       - name: fw_loiter_direction
         field: loiter_direction
         condition: USE_NAV
@@ -1008,6 +1028,11 @@ groups:
         min: HEADING_HOLD_RATE_LIMIT_MIN
         max: HEADING_HOLD_RATE_LIMIT_MAX
 
+      - name: nav_land_direction
+        field: land_direction
+        condition: USE_NAV
+        min: -360
+        max: 360
       - name: nav_mc_pos_z_p
         field: bank_mc.pid[PID_POS_Z].P
         condition: USE_NAV
@@ -1043,16 +1068,6 @@ groups:
         condition: USE_NAV
         min: 0
         max: 255
-      - name: nav_mc_pos_xy_i
-        field: bank_mc.pid[PID_POS_XY].I
-        condition: USE_NAV
-        min: 0
-        max: 255
-      - name: nav_mc_pos_xy_d
-        field: bank_mc.pid[PID_POS_XY].D
-        condition: USE_NAV
-        min: 0
-        max: 255
       - name: nav_mc_vel_xy_p
         field: bank_mc.pid[PID_VEL_XY].P
         condition: USE_NAV
@@ -1065,6 +1080,11 @@ groups:
         max: 255
       - name: nav_mc_vel_xy_d
         field: bank_mc.pid[PID_VEL_XY].D
+        condition: USE_NAV
+        min: 0
+        max: 255
+      - name: nav_mc_vel_xy_ff
+        field: bank_mc.pid[PID_VEL_XY].FF
         condition: USE_NAV
         min: 0
         max: 255
@@ -1270,11 +1290,11 @@ groups:
       - name: nav_land_slowdown_minalt
         field: general.land_slowdown_minalt
         min: 50
-        max: 1000
+        max: 2000
       - name: nav_land_slowdown_maxalt
         field: general.land_slowdown_maxalt
         min: 500
-        max: 4000
+        max: 5000
       - name: nav_emerg_landing_speed
         field: general.emerg_descent_rate
         min: 100
@@ -1366,6 +1386,16 @@ groups:
         condition: USE_MR_BRAKING_MODE
         min: 15
         max: 60
+      - name: nav_mc_pos_deceleration_time
+        field: mc.posDecelerationTime
+        condition: USE_NAV
+        min: 0
+        max: 255
+      - name: nav_mc_pos_expo
+        field: mc.posResponseExpo
+        condition: USE_NAV
+        min: 0
+        max: 255
       - name: nav_fw_cruise_thr
         field: fw.cruise_throttle
         min: 1000
@@ -1408,6 +1438,21 @@ groups:
         condition: NAV_FIXED_WING_LANDING
         min: -20
         max: 20
+      - name: nav_fw_land_safe_alt
+        field: fw.land_safe_alt
+        condition: NAV_FIXED_WING_LANDING
+        min: 50
+        max: 4000
+      - name: nav_fw_land_motor_off_alt
+        field: fw.land_motor_off_alt
+        condition: NAV_FIXED_WING_LANDING
+        min: 50
+        max: 2000
+      - name: nav_fw_land_aproach_distance
+        field: fw.land_aproach_distance
+        condition: NAV_FIXED_WING_LANDING
+        min: 0
+        max: 10000
 
       - name: nav_fw_launch_velocity
         field: fw.launch_velocity_thresh
@@ -1517,6 +1562,35 @@ groups:
         field: ltmUpdateRate
         condition: USE_TELEMETRY_LTM
         table: ltm_rates
+      - name: sim_ground_station_number
+        field: simGroundStationNumber
+        condition: USE_TELEMETRY_SIM
+        type: string
+        max: 16
+      - name: sim_transmission_interval
+        field: simTransmissionInterval
+        condition: USE_TELEMETRY_SIM
+        type: int16_t
+        min: -32768
+        max: 32767
+      - name: acc_event_threshold_high
+        field: accEventThresholdHigh
+        condition: USE_TELEMETRY_SIM
+        type: uint16_t
+        min: 0
+        max: 65535
+      - name: acc_event_threshold_low
+        field: accEventThresholdLow
+        condition: USE_TELEMETRY_SIM
+        type: uint16_t
+        min: 0
+        max: 900
+      - name: acc_event_threshold_neg_x
+        field: accEventThresholdNegX
+        condition: USE_TELEMETRY_SIM
+        type: uint16_t
+        min: 0
+        max: 65535
 
   - name: PG_ELERES_CONFIG
     type: eleresConfig_t
@@ -1559,7 +1633,7 @@ groups:
 
   - name: PG_OSD_CONFIG
     type: osdConfig_t
-    headers: ["io/osd.h", "drivers/vcd.h"]
+    headers: ["io/osd.h", "drivers/osd.h"]
     condition: USE_OSD
     members:
       - name: osd_video_system
@@ -1798,3 +1872,16 @@ groups:
         min: 0
         max: 255
         type: uint8_t
+
+  - name: PG_LOG_CONFIG
+    type: logConfig_t
+    headers: ["common/log.h"]
+    condition: USE_LOG
+    members:
+        - name: log_level
+          field: level
+          table: log_level
+        - name: log_topics
+          field: topics
+          min: 0,
+          max: UINT32_MAX
