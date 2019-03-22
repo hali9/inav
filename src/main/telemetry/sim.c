@@ -244,7 +244,7 @@ void sendSMS(void)
     int len;
     int32_t E7 = 10000000;
     // \x1a sends msg, \x1b cancels
-    len = tfp_sprintf((char*)atCommand, "%s%d.%02dV %d.%dA ALT:%ld SPD:%ld/%d.%d DIS:%d/%d SAT:%d SIG:%d %s maps.google.com/?q=@%ld.%07ld,%ld.%07ld,500m\x1a",
+    len = tfp_sprintf((char*)atCommand, "%s%d.%02dV %d.%dA ALT:%ld SPD:%ld/%d.%d DIS:%d/%d SAT:%d SIG:%d %s maps.google.com/?q=@%ld.%07ld,%ld.%07ld\x1a",
         (now - t_accEventDetected) < 5000 ? accEventDescriptions[accEvent] : "",
         vbat / 100, vbat % 100,
         amps / 10, amps % 10,
