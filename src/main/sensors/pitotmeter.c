@@ -21,8 +21,7 @@
 
 #include "platform.h"
 
-#include "build/debug.h"
-
+#include "common/log.h"
 #include "common/maths.h"
 #include "common/time.h"
 #include "common/utils.h"
@@ -34,6 +33,7 @@
 #include "drivers/pitotmeter.h"
 #include "drivers/pitotmeter_ms4525.h"
 #include "drivers/pitotmeter_adc.h"
+#include "drivers/pitotmeter_virtual.h"
 #include "drivers/time.h"
 
 #include "fc/config.h"
@@ -51,8 +51,6 @@ pitot_t pitot;
 PG_REGISTER_WITH_RESET_TEMPLATE(pitotmeterConfig_t, pitotmeterConfig, PG_PITOTMETER_CONFIG, 2);
 
 #define PITOT_HARDWARE_TIMEOUT_MS   500     // Accept 500ms of non-responsive sensor, report HW failure otherwise
-#define AIR_DENSITY_SEA_LEVEL_15C   1.225f      // Air density at sea level and 15 degrees Celsius
-#define P0                          101325.0f   // standard pressure [Pa]
 
 #ifdef USE_PITOT
 #define PITOT_HARDWARE_DEFAULT    PITOT_AUTODETECT
@@ -100,12 +98,10 @@ bool pitotDetect(pitotDev_t *dev, uint8_t pitotHardwareToUse)
 
         case PITOT_VIRTUAL:
 #if defined(USE_PITOT_VIRTUAL)
-            /*
-            if (adcPitotDetect(&pitot)) {
-                pitotHardware = PITOT_ADC;
+            if (virtualPitotDetect(dev)) {
+                pitotHardware = PITOT_VIRTUAL;
                 break;
             }
-            */
 #endif
             /* If we are asked for a specific sensor - break out, otherwise - fall through and continue */
             if (pitotHardwareToUse != PITOT_AUTODETECT) {
@@ -167,7 +163,7 @@ static void performPitotCalibrationCycle(void)
 
     if (zeroCalibrationIsCompleteS(&pitot.zeroCalibration)) {
         zeroCalibrationGetZeroS(&pitot.zeroCalibration, &pitot.pressureZero);
-        DEBUG_TRACE_SYNC("Pitot calibration complete (%d)", lrintf(pitot.pressureZero));
+        LOG_D(PITOT, "Pitot calibration complete (%d)", (int)lrintf(pitot.pressureZero));
     }
 }
 
