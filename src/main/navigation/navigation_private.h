@@ -66,6 +66,13 @@ typedef enum {
     NAV_HOME_VALID_ALL = NAV_HOME_VALID_XY | NAV_HOME_VALID_Z | NAV_HOME_VALID_HEADING,
 } navigationHomeFlags_t;
 
+typedef enum {
+    NAV_HOME_MIN_RTH = 0, //actual yaw, always
+    NAV_HOME_DISARM = 1, //actual yaw, navigationActualStateHomeValidity
+    NAV_HOME_RESET = 2, //actual yaw, navigationActualStateHomeValidity
+    NAV_HOME_WP = 3, //0 always
+} navigationHomeReason_t;
+
 typedef struct navigationFlags_s {
     bool horizontalPositionDataNew;
     bool verticalPositionDataNew;
@@ -345,6 +352,10 @@ typedef struct {
     float                       totalTripDistance;
 } navigationPosControl_t;
 
+#if defined(NAV_NON_VOLATILE_WAYPOINT_STORAGE)
+PG_DECLARE_ARRAY(navWaypoint_t, NAV_MAX_WAYPOINTS, nonVolatileWaypointList);
+#endif
+
 extern navigationPosControl_t posControl;
 
 /* Internally used functions */
@@ -353,7 +364,7 @@ const navEstimatedPosVel_t * navGetCurrentActualPositionAndVelocity(void);
 float navPidApply2(pidController_t *pid, const float setpoint, const float measurement, const float dt, const float outMin, const float outMax, const pidControllerFlags_e pidFlags);
 float navPidApply3(pidController_t *pid, const float setpoint, const float measurement, const float dt, const float outMin, const float outMax, const pidControllerFlags_e pidFlags, const float gainScaler);
 void navPidReset(pidController_t *pid);
-void navPidInit(pidController_t *pid, float _kP, float _kI, float _kD);
+void navPidInit(pidController_t *pid, float _kP, float _kI, float _kD, float _kFF);
 void navPInit(pController_t *p, float _kP);
 
 bool isThrustFacingDownwards(void);
@@ -364,7 +375,7 @@ bool isLandingDetected(void);
 
 navigationFSMStateFlags_t navGetCurrentStateFlags(void);
 
-void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags);
+void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags, navigationHomeReason_t reason);
 void setDesiredPosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask);
 void setDesiredSurfaceOffset(float surfaceOffset);
 void setDesiredPositionToFarAwayTarget(int32_t yaw, int32_t distance, navSetWaypointFlags_t useMask);
@@ -389,6 +400,7 @@ void setupMulticopterAltitudeController(void);
 void resetMulticopterAltitudeController(void);
 void resetMulticopterPositionController(void);
 void resetMulticopterHeadingController(void);
+void resetMulticopterBrakingMode(void);
 
 bool adjustMulticopterAltitudeFromRCInput(void);
 bool adjustMulticopterHeadingFromRCInput(void);
