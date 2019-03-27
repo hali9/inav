@@ -26,6 +26,7 @@
 #include "config/parameter_group.h"
 #include "common/time.h"
 
+//keep atention of change type conditionId in servoMixer_t
 #define MAX_LOGIC_CONDITIONS 8
 
 typedef enum {
