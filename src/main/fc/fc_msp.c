@@ -472,7 +472,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
             sbufWriteU16(dst, customServoMixers(i)->rate);
             sbufWriteU8(dst, customServoMixers(i)->speed);
         #ifdef USE_LOGIC_CONDITIONS
-            sbufWriteU8(dst, customServoMixers(i)->conditionId);
+            sbufWriteU16(dst, customServoMixers(i)->conditionId);
         #else
             sbufWriteU8(dst, -1);
         #endif
@@ -1882,9 +1882,9 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
             customServoMixersMutable(tmp_u8)->rate = sbufReadU16(src);
             customServoMixersMutable(tmp_u8)->speed = sbufReadU8(src);
         #ifdef USE_LOGIC_CONDITIONS
-            customServoMixersMutable(tmp_u8)->conditionId = sbufReadU8(src);
+            customServoMixersMutable(tmp_u8)->conditionId = sbufReadU16(src);
         #else
-            sbufReadU8(src);
+            sbufReadU16(src);
         #endif
             loadCustomServoMixer();
         } else
