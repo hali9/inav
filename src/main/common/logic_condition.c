@@ -213,13 +213,13 @@ int logicConditionGetOperandValue(logicOperandType_e type, int operand) {
 
 /*
  * ConditionId is ordered from 1 while conditions are indexed from 0
- * conditionId == -1 is always evaluated at true
+ * conditionId == 0 is always evaluated at true
  */ 
-bool logicConditionGetValue(int8_t conditionIds) {
-    if (conditionIds >= 0) {
+bool logicConditionGetValue(uint8_t conditionIds) {
+    if (conditionIds > 0) {
         for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
-            int8_t conditionId = (1 << i);
-            if (conditionIds & conditionId && !logicConditionStates[conditionId].value)
+            uint8_t conditionId = (1 << i);
+            if (conditionIds & conditionId && !logicConditionStates[conditionId-1].value)
                 return false;
         }
         return true;
