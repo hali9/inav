@@ -87,12 +87,12 @@ PG_DECLARE_ARRAY(logicCondition_t, MAX_LOGIC_CONDITIONS, logicConditions);
 
 typedef struct logicConditionState_s {
     int value;
-    uint8_t flags;
+    bool flags;
 } logicConditionState_t;
 
 void logicConditionProcess(uint8_t i);
 
-int logicConditionCompute(
+bool logicConditionCompute(
     logicOperation_e operation,
     int operandA,
     int operandB
@@ -100,5 +100,5 @@ int logicConditionCompute(
 
 int logicConditionGetOperandValue(logicOperandType_e type, int operand);
 
-int logicConditionGetValue(int8_t conditionId);
+bool logicConditionGetValue(int8_t conditionId);
 void logicConditionUpdateTask(timeUs_t currentTimeUs);
