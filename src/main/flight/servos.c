@@ -73,7 +73,7 @@ void pgResetFn_customServoMixers(servoMixer_t *instance)
             .rate = 0,
             .speed = 0
 #ifdef USE_LOGIC_CONDITIONS
-            ,.conditionId = -1
+            ,.conditionId = 0
 #endif
         );
     }
