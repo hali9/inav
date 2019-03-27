@@ -43,7 +43,7 @@ PG_REGISTER_ARRAY(logicCondition_t, MAX_LOGIC_CONDITIONS, logicConditions, PG_LO
 
 void pgResetFn_logicConditions(logicCondition_t *instance)
 {
-    for (int i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
+    for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
         RESET_CONFIG(logicCondition_t, &instance[i],
             .enabled = 0,
             .operation = LOGIC_CONDITION_TRUE,
@@ -73,7 +73,7 @@ void logicConditionProcess(uint8_t i) {
     }
 }
 
-int logicConditionCompute(
+bool logicConditionCompute(
     logicOperation_e operation,
     int operandA,
     int operandB
@@ -227,9 +227,23 @@ int logicConditionGetOperandValue(logicOperandType_e type, int operand) {
  * ConditionId is ordered from 1 while conditions are indexed from 0
  * conditionId == 0 is always evaluated at true
  */ 
-int logicConditionGetValue(int8_t conditionId) {
-    if (conditionId >= 0) {
-        return logicConditionStates[conditionId].value;
+bool logicConditionGetValue(int16_t conditionIds) {
+    if (conditionIds > 0) { //AND
+        uint16_t condition = conditionIds;
+        for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
+            uint16_t conditionId = (1 << i);
+            if (condition & conditionId && !logicConditionStates[i].value)
+                return false;
+        }
+        return true;
+    } else if (conditionIds < 0) { //OR
+        uint16_t condition = -conditionIds;
+        for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
+            uint16_t conditionId = (1 << i);
+            if (condition & conditionId && logicConditionStates[i].value)
+                return true;
+        }
+        return false;
     } else {
         return true;
     }

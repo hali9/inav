@@ -102,7 +102,7 @@ typedef struct servoMixer_s {
     int16_t rate;                           // range [-1000;+1000] ; can be used to adjust a rate 0-1000% and a direction
     uint8_t speed;                          // reduces the speed of the rule, 0=unlimited speed
 #ifdef USE_LOGIC_CONDITIONS
-    int8_t conditionId;
+    int16_t conditionId;
 #endif
 } servoMixer_t;
 
