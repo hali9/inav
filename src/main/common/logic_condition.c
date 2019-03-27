@@ -232,7 +232,7 @@ bool logicConditionGetValue(int16_t conditionIds) {
         uint16_t condition = conditionIds;
         for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
             uint16_t conditionId = (1 << i);
-            if (condition & conditionId && !logicConditionStates[conditionId-1].value)
+            if (condition & conditionId && !logicConditionStates[i].value)
                 return false;
         }
         return true;
@@ -240,7 +240,7 @@ bool logicConditionGetValue(int16_t conditionIds) {
         uint16_t condition = -conditionIds;
         for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
             uint16_t conditionId = (1 << i);
-            if (condition & conditionId && logicConditionStates[conditionId-1].value)
+            if (condition & conditionId && logicConditionStates[i].value)
                 return true;
         }
         return false;
