@@ -62,7 +62,7 @@ void pgResetFn_logicConditions(logicCondition_t *instance)
 
 logicConditionState_t logicConditionStates[MAX_LOGIC_CONDITIONS];
 
-void logicConditionProcess(uint8_t ids) {
+void logicConditionProcess(uint8_t i) {
 
     if (logicConditions(i)->enabled) {
         const int operandAValue = logicConditionGetOperandValue(logicConditions(i)->operandA.type, logicConditions(i)->operandA.value);
