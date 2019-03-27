@@ -43,7 +43,7 @@ PG_REGISTER_ARRAY(logicCondition_t, MAX_LOGIC_CONDITIONS, logicConditions, PG_LO
 
 void pgResetFn_logicConditions(logicCondition_t *instance)
 {
-    for (int i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
+    for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
         RESET_CONFIG(logicCondition_t, &instance[i],
             .enabled = 0,
             .operation = LOGIC_CONDITION_TRUE,
@@ -62,7 +62,7 @@ void pgResetFn_logicConditions(logicCondition_t *instance)
 
 logicConditionState_t logicConditionStates[MAX_LOGIC_CONDITIONS];
 
-void logicConditionProcess(uint8_t i) {
+void logicConditionProcess(uint8_t ids) {
 
     if (logicConditions(i)->enabled) {
         const int operandAValue = logicConditionGetOperandValue(logicConditions(i)->operandA.type, logicConditions(i)->operandA.value);
@@ -73,7 +73,7 @@ void logicConditionProcess(uint8_t i) {
     }
 }
 
-int logicConditionCompute(
+bool logicConditionCompute(
     logicOperation_e operation,
     int operandA,
     int operandB
@@ -94,18 +94,6 @@ int logicConditionCompute(
 
         case LOGIC_CONDITION_LOWER_THAN:
             return operandA < operandB;
-            break;
-
-        case LOGIC_CONDITION_LOW:
-            return operandA < 1333;
-            break;
-
-        case LOGIC_CONDITION_MID:
-            return operandA >= 1333 && operandA <= 1666;
-            break;
-
-        case LOGIC_CONDITION_HIGH:
-            return operandA > 1666;
             break;
 
         default:
@@ -225,11 +213,16 @@ int logicConditionGetOperandValue(logicOperandType_e type, int operand) {
 
 /*
  * ConditionId is ordered from 1 while conditions are indexed from 0
- * conditionId == 0 is always evaluated at true
+ * conditionId == -1 is always evaluated at true
  */ 
-int logicConditionGetValue(int8_t conditionId) {
-    if (conditionId >= 0) {
-        return logicConditionStates[conditionId].value;
+bool logicConditionGetValue(int8_t conditionIds) {
+    if (conditionIds >= 0) {
+        for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
+            int8_t conditionId = (1 << i);
+            if (conditionIds & conditionId && !logicConditionStates[conditionId].value)
+                return false;
+        }
+        return true;
     } else {
         return true;
     }
