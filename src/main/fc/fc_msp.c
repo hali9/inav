@@ -474,7 +474,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
         #ifdef USE_LOGIC_CONDITIONS
             sbufWriteU16(dst, customServoMixers(i)->conditionId);
         #else
-            sbufWriteU8(dst, -1);
+            sbufWriteU16(dst, 0);
         #endif
         }
         break;
