@@ -1680,7 +1680,7 @@ static void cliServoMix(char *cmdline)
             args[INPUT] >= 0 && args[INPUT] < INPUT_SOURCE_COUNT &&
             args[RATE] >= -1000 && args[RATE] <= 1000 &&
             args[SPEED] >= 0 && args[SPEED] <= MAX_SERVO_SPEED &&
-            args[CONDITION] >= -1 && args[CONDITION] < MAX_LOGIC_CONDITIONS
+            args[CONDITION] > -(1 << MAX_LOGIC_CONDITIONS) && args[CONDITION] < (1 << MAX_LOGIC_CONDITIONS)
         ) {
             customServoMixersMutable(i)->targetChannel = args[TARGET];
             customServoMixersMutable(i)->inputSource = args[INPUT];
@@ -1748,7 +1748,7 @@ static void printLogic(uint8_t dumpMask, const logicCondition_t *logicConditions
 
 static void cliLogic(char *cmdline) {
     char * saveptr;
-    int args[8], check = 0;
+    int args[10], check = 0;
     uint8_t len = strlen(cmdline);
 
     if (len == 0) {
