@@ -96,6 +96,18 @@ bool logicConditionCompute(
             return operandA < operandB;
             break;
 
+        case LOGIC_CONDITION_LOW:
+            return operandA < 1333;
+            break;
+
+        case LOGIC_CONDITION_MID:
+            return operandA >= 1333 && operandA <= 1666;
+            break;
+
+        case LOGIC_CONDITION_HIGH:
+            return operandA > 1666;
+            break;
+
         default:
             return false;
             break; 
