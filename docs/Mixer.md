@@ -118,7 +118,7 @@ When `<condition>` is negative, conditions are combined using the OR operator, s
 ### Operation type
 
 | CLI input ID | Operation type | Operator used | Description |
-|----|----------|----------|-----------------------------------------------------------------------------------|
+|----|----------|---------------|------------------------------------------------------------------------------|
 | 0  | True     | True | Always return true value |
 | 1  | Equal    | A = B | Return true if operand A equals operand B, othervise return false |
 | 2  | Greater  | A > B | Return true if operand A is greater then operand B, othervise return false |
