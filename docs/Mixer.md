@@ -90,16 +90,27 @@ The `smix reset` command removes all the existing motor mixing rules.
 The `smix` command is used to list, create or modify rules. To list the currently defined rules run the `smix` command without parameters.
 
 To create or modify rules use the `smix` command with the following syntax: `smix <n> <servo_index> <input_id> <weight> <speed> <condition>`.
+
 `<n>` is representing the index of the servo mixing rule to create or modify (integer). To disable a mixing rule set the weight to 0.
+
 `<condition>` is using for logic condition. Default value 0 mean that no logic condition is used and `smix` is always enabled.
+
 `<condition>` are stored in binary moving:
+
 CLI logic 0 is first condition and means 00000001, so put 1 `<condition>`.
+
 CLI logic 1 is second condition and means 00000010, so put 2 `<condition>`.
+
 CLI logic 2 is third condition and means 00000100, so put 4 `<condition>`.
+
 ...
+
 CLI logic 7 is eighth condition and means 10000000, so put 128 `<condition>`.
+
 It is passible to use multiple condition together. For example: if You want use CLI `logic 1` and `logic 3` together put 10 (2 (00000010) + 8 (00001000)).
+
 When `<condition>` is positive, conditions are combined using the AND operator, so all conditions must be true to enable `smix`.
+
 When `<condition>` is negative, conditions are combined using the OR operator, so is enough only one conditions must be true to enable `smix`.
 
 ## Logic Conditions (LC)
