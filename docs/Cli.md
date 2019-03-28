@@ -78,6 +78,7 @@ After restoring it's always a good idea to `dump` or `diff` the settings once ag
 | `gpspassthrough` | passthrough gps to serial                      |
 | `help`           |                                                |
 | `led`            | configure leds                                 |
+| `logic`          | list or set logic conditions. See more in docs/Mixer.md section Logic Conditions |
 | `map`            | mapping of rc channel order                    |
 | `motor`          | get/set motor output value                     |
 | `play_sound`     | index, or none for next                        |
