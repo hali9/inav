@@ -136,7 +136,7 @@ When `<condition>` is negative, conditions are combined using the OR operator, s
 ### Flight operand value
 
 | CLI input ID | Unit | Flight operand value | Description |
-|----|------------|--------------------------------------------------------------------------------------------|
+|----|----------------|-----------|----------------------------------------------------------------------------|
 | 0  | ARM_TIMER      | s         |  |
 | 1  | HOME_DISTANCE  | m         |  |
 | 2  | TRIP_DISTANCE  | m         |  |
