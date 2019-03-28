@@ -79,6 +79,7 @@ void logicConditionProcess(uint8_t i) {
 }
 
 bool logicConditionCompute(logicOperation_e operation, int operandA, int operandB, int operandC) {
+
     switch (operation) {
 
         case LOGIC_CONDITION_TRUE:
