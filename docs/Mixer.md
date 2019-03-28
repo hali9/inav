@@ -161,9 +161,9 @@ Flaps and spoilers
 ```
 logic 0 1 4 1 10 0 1000 0 1200 0 //This is condition for spoilers
 ```
-//First logic condition (0), is enabled (1), operator between (4), rx channel (1), ten (10) 
-//must be between value (0) 1000 and value (0) 1200, flag (0) is not used. 
-//From 1201 to 1400 no flap or spoilers, so no condition
+First logic condition (0), is enabled (1), operator between (4), rx channel (1), ten (10) must be between value (0) 1000 and value (0) 1200, flag (0) is not used. 
+
+From 1201 to 1400 no flap or spoilers, so no condition
 ```
 logic 1 1 4 1 10 0 1401 0 1600 0 //Small flaps, 1401 because between operator use <= and >=
 logic 2 1 4 1 10 0 1601 0 1800 0 //Full flaps
