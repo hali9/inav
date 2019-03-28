@@ -1680,7 +1680,7 @@ static void cliServoMix(char *cmdline)
             args[INPUT] >= 0 && args[INPUT] < INPUT_SOURCE_COUNT &&
             args[RATE] >= -1000 && args[RATE] <= 1000 &&
             args[SPEED] >= 0 && args[SPEED] <= MAX_SERVO_SPEED &&
-            args[CONDITION] >= -1 && args[CONDITION] < MAX_LOGIC_CONDITIONS
+            args[CONDITION] > -(1 << MAX_LOGIC_CONDITIONS) && args[CONDITION] < (1 << MAX_LOGIC_CONDITIONS)
         ) {
             customServoMixersMutable(i)->targetChannel = args[TARGET];
             customServoMixersMutable(i)->inputSource = args[INPUT];
@@ -1700,7 +1700,7 @@ static void cliServoMix(char *cmdline)
 
 static void printLogic(uint8_t dumpMask, const logicCondition_t *logicConditions, const logicCondition_t *defaultLogicConditions)
 {
-    const char *format = "logic %d %d %d %d %d %d %d %d";
+    const char *format = "logic %d %d %d %d %d %d %d %d %d %d";
     for (uint32_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
         const logicCondition_t logic = logicConditions[i];
         
@@ -1714,6 +1714,8 @@ static void printLogic(uint8_t dumpMask, const logicCondition_t *logicConditions
                 logic.operandA.value == defaultValue.operandA.value &&
                 logic.operandB.type == defaultValue.operandB.type &&
                 logic.operandB.value == defaultValue.operandB.value &&
+                logic.operandC.type == defaultValue.operandC.type &&
+                logic.operandC.value == defaultValue.operandC.value &&
                 logic.flags == defaultValue.flags;
 
             cliDefaultPrintLinef(dumpMask, equalsDefault, format,
@@ -1724,6 +1726,8 @@ static void printLogic(uint8_t dumpMask, const logicCondition_t *logicConditions
                 logic.operandA.value,
                 logic.operandB.type,
                 logic.operandB.value,
+                logic.operandC.type,
+                logic.operandC.value,
                 logic.flags
             );
         }
@@ -1735,6 +1739,8 @@ static void printLogic(uint8_t dumpMask, const logicCondition_t *logicConditions
             logic.operandA.value,
             logic.operandB.type,
             logic.operandB.value,
+            logic.operandC.type,
+            logic.operandC.value,
             logic.flags
         );
     }
@@ -1742,7 +1748,7 @@ static void printLogic(uint8_t dumpMask, const logicCondition_t *logicConditions
 
 static void cliLogic(char *cmdline) {
     char * saveptr;
-    int args[8], check = 0;
+    int args[10], check = 0;
     uint8_t len = strlen(cmdline);
 
     if (len == 0) {
@@ -1758,6 +1764,8 @@ static void cliLogic(char *cmdline) {
             OPERAND_A_VALUE,
             OPERAND_B_TYPE, 
             OPERAND_B_VALUE,
+            OPERAND_C_TYPE, 
+            OPERAND_C_VALUE,
             FLAGS,
             ARGS_COUNT
             };
@@ -1781,6 +1789,8 @@ static void cliLogic(char *cmdline) {
             args[OPERAND_A_VALUE] >= -1000000 && args[OPERAND_A_VALUE] <= 1000000 &&
             args[OPERAND_B_TYPE] >= 0 && args[OPERAND_B_TYPE] < LOGIC_CONDITION_OPERAND_TYPE_LAST &&
             args[OPERAND_B_VALUE] >= -1000000 && args[OPERAND_B_VALUE] <= 1000000 &&
+            args[OPERAND_C_TYPE] >= 0 && args[OPERAND_C_TYPE] < LOGIC_CONDITION_OPERAND_TYPE_LAST &&
+            args[OPERAND_C_VALUE] >= -1000000 && args[OPERAND_C_VALUE] <= 1000000 &&
             args[FLAGS] >= 0 && args[FLAGS] <= 255
         
         ) {
@@ -1790,6 +1800,8 @@ static void cliLogic(char *cmdline) {
             logicConditionsMutable(i)->operandA.value = args[OPERAND_A_VALUE];
             logicConditionsMutable(i)->operandB.type = args[OPERAND_B_TYPE];
             logicConditionsMutable(i)->operandB.value = args[OPERAND_B_VALUE];
+            logicConditionsMutable(i)->operandC.type = args[OPERAND_C_TYPE];
+            logicConditionsMutable(i)->operandC.value = args[OPERAND_C_VALUE];
             logicConditionsMutable(i)->flags = args[FLAGS];
 
             cliLogic("");
@@ -3163,7 +3175,7 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("servo", "configure servos", NULL, cliServo),
 #ifdef USE_LOGIC_CONDITIONS
     CLI_COMMAND_DEF("logic", "configure logic conditions", 
-        "<rule> <enabled> <operation> <operand A type> <operand A value> <operand B type> <operand B value> <flags>\r\n"
+        "<rule> <enabled> <operation> <operand A type> <operand A value> <operand B type> <operand B value> <operand C type> <operand C value> <flags>\r\n"
         "\treset\r\n", cliLogic),
 #endif
     CLI_COMMAND_DEF("set", "change setting", "[<name>=<value>]", cliSet),

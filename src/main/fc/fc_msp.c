@@ -487,6 +487,8 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
             sbufWriteU32(dst, logicConditions(i)->operandA.value);
             sbufWriteU8(dst, logicConditions(i)->operandB.type);
             sbufWriteU32(dst, logicConditions(i)->operandB.value);
+            sbufWriteU8(dst, logicConditions(i)->operandC.type);
+            sbufWriteU32(dst, logicConditions(i)->operandC.value);
             sbufWriteU8(dst, logicConditions(i)->flags);
         }
         break;
@@ -1900,6 +1902,8 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
             logicConditionsMutable(tmp_u8)->operandA.value = sbufReadU32(src);
             logicConditionsMutable(tmp_u8)->operandB.type = sbufReadU8(src);
             logicConditionsMutable(tmp_u8)->operandB.value = sbufReadU32(src);
+            logicConditionsMutable(tmp_u8)->operandC.type = sbufReadU8(src);
+            logicConditionsMutable(tmp_u8)->operandC.value = sbufReadU32(src);
             logicConditionsMutable(tmp_u8)->flags = sbufReadU8(src);
         } else
             return MSP_RESULT_ERROR;

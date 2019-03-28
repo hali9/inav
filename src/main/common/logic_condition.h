@@ -34,9 +34,7 @@ typedef enum {
     LOGIC_CONDITION_EQUAL,          // 1
     LOGIC_CONDITION_GREATER_THAN,   // 2
     LOGIC_CONDITION_LOWER_THAN,     // 3
-    LOGIC_CONDITION_LOW,            // 4
-    LOGIC_CONDITION_MID,            // 5
-    LOGIC_CONDITION_HIGH,           // 6
+    LOGIC_CONDITION_BETWEEN,        // 4
     LOGIC_CONDITION_LAST
 } logicOperation_e;
 
@@ -81,6 +79,7 @@ typedef struct logicCondition_s {
     logicOperation_e operation;
     logicOperand_t operandA;
     logicOperand_t operandB;
+    logicOperand_t operandC;
     uint8_t flags;
 } logicCondition_t;
 
@@ -96,7 +95,8 @@ void logicConditionProcess(uint8_t i);
 bool logicConditionCompute(
     logicOperation_e operation,
     int operandA,
-    int operandB
+    int operandB,
+    int operandC
 );
 
 int logicConditionGetOperandValue(logicOperandType_e type, int operand);
