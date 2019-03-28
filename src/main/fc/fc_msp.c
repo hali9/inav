@@ -472,9 +472,9 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
             sbufWriteU16(dst, customServoMixers(i)->rate);
             sbufWriteU8(dst, customServoMixers(i)->speed);
         #ifdef USE_LOGIC_CONDITIONS
-            sbufWriteU8(dst, customServoMixers(i)->conditionId);
+            sbufWriteU16(dst, customServoMixers(i)->conditionId);
         #else
-            sbufWriteU8(dst, -1);
+            sbufWriteU16(dst, 0);
         #endif
         }
         break;
@@ -487,6 +487,8 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
             sbufWriteU32(dst, logicConditions(i)->operandA.value);
             sbufWriteU8(dst, logicConditions(i)->operandB.type);
             sbufWriteU32(dst, logicConditions(i)->operandB.value);
+            sbufWriteU8(dst, logicConditions(i)->operandC.type);
+            sbufWriteU32(dst, logicConditions(i)->operandC.value);
             sbufWriteU8(dst, logicConditions(i)->flags);
         }
         break;
@@ -1882,9 +1884,9 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
             customServoMixersMutable(tmp_u8)->rate = sbufReadU16(src);
             customServoMixersMutable(tmp_u8)->speed = sbufReadU8(src);
         #ifdef USE_LOGIC_CONDITIONS
-            customServoMixersMutable(tmp_u8)->conditionId = sbufReadU8(src);
+            customServoMixersMutable(tmp_u8)->conditionId = sbufReadU16(src);
         #else
-            sbufReadU8(src);
+            sbufReadU16(src);
         #endif
             loadCustomServoMixer();
         } else
@@ -1900,6 +1902,8 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
             logicConditionsMutable(tmp_u8)->operandA.value = sbufReadU32(src);
             logicConditionsMutable(tmp_u8)->operandB.type = sbufReadU8(src);
             logicConditionsMutable(tmp_u8)->operandB.value = sbufReadU32(src);
+            logicConditionsMutable(tmp_u8)->operandC.type = sbufReadU8(src);
+            logicConditionsMutable(tmp_u8)->operandC.value = sbufReadU32(src);
             logicConditionsMutable(tmp_u8)->flags = sbufReadU8(src);
         } else
             return MSP_RESULT_ERROR;

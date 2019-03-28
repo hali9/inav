@@ -26,6 +26,7 @@
 #include "config/parameter_group.h"
 #include "common/time.h"
 
+//keep atention of change type conditionId in servoMixer_t
 #define MAX_LOGIC_CONDITIONS 8
 
 typedef enum {
@@ -33,9 +34,7 @@ typedef enum {
     LOGIC_CONDITION_EQUAL,          // 1
     LOGIC_CONDITION_GREATER_THAN,   // 2
     LOGIC_CONDITION_LOWER_THAN,     // 3
-    LOGIC_CONDITION_LOW,            // 4
-    LOGIC_CONDITION_MID,            // 5
-    LOGIC_CONDITION_HIGH,           // 6
+    LOGIC_CONDITION_BETWEEN,        // 4
     LOGIC_CONDITION_LAST
 } logicOperation_e;
 
@@ -80,6 +79,7 @@ typedef struct logicCondition_s {
     logicOperation_e operation;
     logicOperand_t operandA;
     logicOperand_t operandB;
+    logicOperand_t operandC;
     uint8_t flags;
 } logicCondition_t;
 
@@ -87,18 +87,19 @@ PG_DECLARE_ARRAY(logicCondition_t, MAX_LOGIC_CONDITIONS, logicConditions);
 
 typedef struct logicConditionState_s {
     int value;
-    uint8_t flags;
+    bool flags;
 } logicConditionState_t;
 
 void logicConditionProcess(uint8_t i);
 
-int logicConditionCompute(
+bool logicConditionCompute(
     logicOperation_e operation,
     int operandA,
-    int operandB
+    int operandB,
+    int operandC
 );
 
 int logicConditionGetOperandValue(logicOperandType_e type, int operand);
 
-int logicConditionGetValue(int8_t conditionId);
+bool logicConditionGetValue(int16_t conditionId);
 void logicConditionUpdateTask(timeUs_t currentTimeUs);

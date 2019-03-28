@@ -43,7 +43,7 @@ PG_REGISTER_ARRAY(logicCondition_t, MAX_LOGIC_CONDITIONS, logicConditions, PG_LO
 
 void pgResetFn_logicConditions(logicCondition_t *instance)
 {
-    for (int i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
+    for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
         RESET_CONFIG(logicCondition_t, &instance[i],
             .enabled = 0,
             .operation = LOGIC_CONDITION_TRUE,
@@ -52,6 +52,10 @@ void pgResetFn_logicConditions(logicCondition_t *instance)
                 .value = 0
             },
             .operandB = {
+                .type = LOGIC_CONDITION_OPERAND_TYPE_VALUE,
+                .value = 0
+            },
+            .operandC = {
                 .type = LOGIC_CONDITION_OPERAND_TYPE_VALUE,
                 .value = 0
             },
@@ -67,17 +71,14 @@ void logicConditionProcess(uint8_t i) {
     if (logicConditions(i)->enabled) {
         const int operandAValue = logicConditionGetOperandValue(logicConditions(i)->operandA.type, logicConditions(i)->operandA.value);
         const int operandBValue = logicConditionGetOperandValue(logicConditions(i)->operandB.type, logicConditions(i)->operandB.value);
-        logicConditionStates[i].value = logicConditionCompute(logicConditions(i)->operation, operandAValue, operandBValue);
+        const int operandCValue = logicConditionGetOperandValue(logicConditions(i)->operandC.type, logicConditions(i)->operandC.value);
+        logicConditionStates[i].value = logicConditionCompute(logicConditions(i)->operation, operandAValue, operandBValue, operandCValue);
     } else {
         logicConditionStates[i].value = false;
     }
 }
 
-int logicConditionCompute(
-    logicOperation_e operation,
-    int operandA,
-    int operandB
-) {
+bool logicConditionCompute(logicOperation_e operation, int operandA, int operandB, int operandC) {
     switch (operation) {
 
         case LOGIC_CONDITION_TRUE:
@@ -96,16 +97,8 @@ int logicConditionCompute(
             return operandA < operandB;
             break;
 
-        case LOGIC_CONDITION_LOW:
-            return operandA < 1333;
-            break;
-
-        case LOGIC_CONDITION_MID:
-            return operandA >= 1333 && operandA <= 1666;
-            break;
-
-        case LOGIC_CONDITION_HIGH:
-            return operandA > 1666;
+        case LOGIC_CONDITION_BETWEEN:
+            return operandA >= operandB && operandA <= operandC;
             break;
 
         default:
@@ -227,9 +220,23 @@ int logicConditionGetOperandValue(logicOperandType_e type, int operand) {
  * ConditionId is ordered from 1 while conditions are indexed from 0
  * conditionId == 0 is always evaluated at true
  */ 
-int logicConditionGetValue(int8_t conditionId) {
-    if (conditionId >= 0) {
-        return logicConditionStates[conditionId].value;
+bool logicConditionGetValue(int16_t conditionIds) {
+    if (conditionIds > 0) { //AND
+        uint16_t condition = conditionIds;
+        for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
+            uint16_t conditionId = (1 << i);
+            if (condition & conditionId && !logicConditionStates[i].value)
+                return false;
+        }
+        return true;
+    } else if (conditionIds < 0) { //OR
+        uint16_t condition = -conditionIds;
+        for (uint8_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
+            uint16_t conditionId = (1 << i);
+            if (condition & conditionId && logicConditionStates[i].value)
+                return true;
+        }
+        return false;
     } else {
         return true;
     }
