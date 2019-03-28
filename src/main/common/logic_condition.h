@@ -101,5 +101,5 @@ bool logicConditionCompute(
 
 int logicConditionGetOperandValue(logicOperandType_e type, int operand);
 
-bool logicConditionGetValue(int16_t conditionId);
+bool logicConditionGetValue(int16_t conditionIds);
 void logicConditionUpdateTask(timeUs_t currentTimeUs);
