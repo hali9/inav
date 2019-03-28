@@ -127,12 +127,49 @@ When `<condition>` is negative, conditions are combined using the OR operator, s
 
 ### Operand type
 
+| CLI input ID | Operand type | Operand value | Description |
+|----|------------|-------------|------------------------------------------------------------------------------|
+| 0  | Value      | A simply number |  |
+| 1  | RX channel | Number of channel |  |
+| 2  | Flight     | Number of flight operand value |  |
 
+### Flight operand value
 
+| CLI input ID | Unit | Flight operand value | Description |
+|----|------------|--------------------------------------------------------------------------------------------|
+| 0  | ARM_TIMER      | s         |  |
+| 1  | HOME_DISTANCE  | m         |  |
+| 2  | TRIP_DISTANCE  | m         |  |
+| 3  | RSSI           | % (0-99)  |  |
+| 4  | VBAT           | Volt / 10 |  |
+| 5  | CELL_VOLTAGE   | Volt / 10 |  |
+| 6  | CURRENT        | Amp / 100 |  |
+| 7  | MAH_DRAWN      | mAh       |  |
+| 8  | GPS_SATS       | count     |  |
+| 9  | GROUD_SPEED    | cm/s      |  |
+| 10 | 3D_SPEED       | cm/s      |  |
+| 11 | AIR_SPEED      | cm/s      |  |
+| 12 | ALTITUDE       | cm        |  |
+| 13 | VERTICAL_SPEED | cm/s      |  |
+| 14 | TROTTLE_POS    | %         |  |
+| 15 | ATTITUDE_ROLL  | deg       |  |
+| 16 | ATTITUDE_PITCH | deg       |  |
 
-### Operand value
+### Example
 
+Flaps and spoilers
+```
+logic 0 1 4 1 10 0 1000 0 1200 0 //First logic condition (0), is enabled (1), operator between (4), rx channel (1), ten (10) must be between value (0) 1000 and value (0) 1200, flag (0) is not used. This is condition for spoilers.
+//From 1201 to 1400 no flap or spoilers
+logic 1 1 4 1 10 0 1401 0 1600 0 //1401 because between operator use <= and >=. Small flaps.
+logic 2 1 4 1 10 0 1601 0 1800 0 //Full flaps.
 
-
-
-
+smix 0 2 1 100 0 0 //elewator
+smix 1 3 2 100 0 0 //rudder
+smix 2 4 0 100 0 0 //aileron 1
+smix 3 5 0 -100 0 0 //aileron 2
+smix 4 4 29 -40 0 -3 //spoilers - use logic one input source (29)
+smix 5 5 29 40 0 -3 //spoilers - enabled when logic 0 or logic 1 is true
+smix 6 4 29 60 0 -6 //flaps - enabled when logic 0 or logic 1 is true
+smix 7 5 29 -60 0 -6 //flaps
+```
