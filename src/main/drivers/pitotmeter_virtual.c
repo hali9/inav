@@ -63,19 +63,19 @@ static void virtualPitotCalculate(pitotDev_t *pitot, float *pressure, float *tem
 {
     UNUSED(pitot);
     float airSpeed = 0.0f;
-    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, 0);
-    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, 0);
-    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, 0);
-    DEBUG_SET(DEBUG_VIRTUAL_PITOT, 3, 0);
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 4, 0);
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 5, 0);
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 6, 0);
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 7, 0);
     if (pitotIsCalibrationComplete()) {
-        DEBUG_SET(DEBUG_VIRTUAL_PITOT, 3, posControl.actualState.velXY); 
+        DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 7, posControl.actualState.velXY); 
         if (isEstimatedWindSpeedValid()) {
             uint16_t windHeading = 0; //centidegrees
             float windSpeed = getEstimatedHorizontalWindSpeed(&windHeading); //cm/s
-            DEBUG_SET(DEBUG_VIRTUAL_PITOT, 0, CENTIDEGREES_TO_DECIDEGREES(windHeading)); //deci because overflow
-            DEBUG_SET(DEBUG_VIRTUAL_PITOT, 1, windSpeed);
+            DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 4, CENTIDEGREES_TO_DECIDEGREES(windHeading)); //deci because overflow
+            DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 5, windSpeed);
             float horizontalWindSpeed = windSpeed * cos_approx(CENTIDEGREES_TO_RADIANS(windHeading - posControl.actualState.yaw)); //yaw int32_t centidegrees
-            DEBUG_SET(DEBUG_VIRTUAL_PITOT, 2, horizontalWindSpeed);
+            DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 6, horizontalWindSpeed);
             airSpeed = posControl.actualState.velXY - horizontalWindSpeed; //float cm/s or gpsSol.groundSpeed int16_t cm/s
         } else {
             airSpeed = pidProfile()->fixedWingReferenceAirspeed; //float cm/s
