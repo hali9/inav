@@ -971,6 +971,16 @@ groups:
         field: fixedWingItermThrowLimit
         min: FW_ITERM_THROW_LIMIT_MIN
         max: FW_ITERM_THROW_LIMIT_MAX
+      - name: nav_fw_heading2roll
+        field: heading_to_roll
+        condition: USE_NAV
+        min: 0
+        max: 250		
+      - name: nav_fw_heading2yaw
+        field: heading_to_yaw
+        condition: USE_NAV
+        min: -125
+        max: 125
       - name: fw_loiter_direction
         field: loiter_direction
         condition: USE_NAV
