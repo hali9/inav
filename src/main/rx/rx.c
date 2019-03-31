@@ -574,17 +574,21 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
     if (rxFlightChannelsValid && rxAuxChannelsValid && rxSignalReceived) {
         failsafeOnValidDataReceived();
     } else {
-        for (int channel = NON_AUX_CHANNEL_COUNT; channel < rxRuntimeConfig.channelCount; channel++) {
-            int16_t auxFail = *rxChannelAuxConfigs(channel);
-            if (auxFail > 1) {
-                rcChannels[channel].data = auxFail;
-            }
-        }
+        applyAuxChannelsOnFailsafe();
         failsafeOnValidDataFailed();
     }
 
     rcSampleIndex++;
     return true;
+}
+
+void applyAuxChannelsOnFailsafe() {
+    for (int channel = NON_AUX_CHANNEL_COUNT; channel < rxRuntimeConfig.channelCount; channel++) {
+        int16_t auxFail = *rxChannelAuxConfigs(channel);
+        if (auxFail > 1) {
+            rcChannels[channel].data = auxFail;
+        }
+    }
 }
 
 void parseRcChannels(const char *input)
