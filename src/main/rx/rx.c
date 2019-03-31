@@ -542,7 +542,7 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
                 if (channel < NON_AUX_CHANNEL_COUNT) {
                     rxFlightChannelsValid = false;
                 } else {
-                    int16_t auxFail = rxChannelAuxConfigs(channel);
+                    int16_t auxFail = *rxChannelAuxConfigs(channel);
                     if (auxFail) {
                         rxAuxChannelsValid = false;
                     }
@@ -575,7 +575,7 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
         failsafeOnValidDataReceived();
     } else {
         for (int channel = NON_AUX_CHANNEL_COUNT; channel < rxRuntimeConfig.channelCount; channel++) {
-            int16_t auxFail = rxChannelAuxConfigs(channel);
+            int16_t auxFail = *rxChannelAuxConfigs(channel);
             if (auxFail > 1) {
                 rcChannels[channel].data = auxFail;
             }
@@ -662,8 +662,12 @@ static void updateRSSIPWM(void)
     // Read value of AUX channel as rssi
     unsigned rssiChannel = rxConfig()->rssi_channel;
     if (rssiChannel > 0) {
-        pwmRssi = rcChannels[rssiChannel - 1].raw;
-
+        int16_t auxFail = *rxChannelAuxConfigs(channel);
+        if (!(rxFlightChannelsValid && rxAuxChannelsValid && rxSignalReceived) && auxFail > 1) {
+            pwmRssi = auxFail;
+        } else {
+            pwmRssi = rcChannels[rssiChannel - 1].raw;
+        }
         // Range of rawPwmRssi is [1000;2000]. rssi should be in [0;1023];
         uint16_t rawRSSI = (uint16_t)((constrain(pwmRssi - 1000, 0, 1000) / 1000.0f) * (RSSI_MAX_VALUE * 1.0f));
         setRSSI(rawRSSI, RSSI_SOURCE_RX_CHANNEL, false);
