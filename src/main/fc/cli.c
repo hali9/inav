@@ -1174,11 +1174,11 @@ static void cliRxAux(char *cmdline)
 
             if (validArgumentCount != 1) {
                 cliShowParseError();
-            } else if (auxValue < PWM_PULSE_MIN || auxValue > PWM_PULSE_MAX || auxValue == 0 || auxValue == 1) {
-                cliShowParseError();
-            } else {
+            } else if ((PWM_PULSE_MIN <= auxValue && auxValue <= PWM_PULSE_MAX) || auxValue == 0 || auxValue == 1) {
                 int16_t *channelAuxConfig = rxChannelAuxConfigsMutable(i);
                 (*channelAuxConfig) = auxValue;
+            } else {
+                cliShowParseError();
             }
         } else {
             cliShowArgumentRangeError("channel", 0, MAX_AUX_CHANNEL_COUNT - 1);
