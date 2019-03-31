@@ -1173,7 +1173,7 @@ static void cliRxAux(char *cmdline)
 
             if (validArgumentCount != 1) {
                 cliShowParseError();
-            } else if (auxValue < PWM_PULSE_MIN || auxValue > PWM_PULSE_MAX || auxValue == 0 || auxValue == -1) {
+            } else if (auxValue < PWM_PULSE_MIN || auxValue > PWM_PULSE_MAX || auxValue == 0 || auxValue == 1) {
                 cliShowParseError();
             } else {
                 rxChannelAuxConfigsMutable(i) = auxValue;
