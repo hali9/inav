@@ -1138,12 +1138,12 @@ static void printRxAux(uint8_t dumpMask, const int16_t *channelAuxConfigs, const
             equalsDefault = channelAuxConfigs[i] == defaultChannelAuxConfigs[i];
             cliDefaultPrintLinef(dumpMask, equalsDefault, format,
                 i,
-                defaultChannelRangeConfigs[i]
+                defaultChannelAuxConfigs[i]
             );
         }
         cliDumpPrintLinef(dumpMask, equalsDefault, format,
             i,
-            channelAuxConfigs[i],
+            channelAuxConfigs[i]
         );
     }
 }
@@ -1157,7 +1157,8 @@ static void cliRxAux(char *cmdline)
 	printRxAux(DUMP_MASTER, rxChannelAuxConfigs(0), NULL);
     } else if (sl_strcasecmp(cmdline, "reset") == 0) {
 	for (int i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
-            rxChannelAuxConfigsMutable(i) = 0;
+            int16_t *channelAuxConfig = rxChannelAuxConfigsMutable(i);
+            (*channelAuxConfig) = 0;
         }
     } else {
         ptr = cmdline;
@@ -1176,7 +1177,8 @@ static void cliRxAux(char *cmdline)
             } else if (auxValue < PWM_PULSE_MIN || auxValue > PWM_PULSE_MAX || auxValue == 0 || auxValue == 1) {
                 cliShowParseError();
             } else {
-                rxChannelAuxConfigsMutable(i) = auxValue;
+                int16_t *channelAuxConfig = rxChannelAuxConfigsMutable(i);
+                (*channelAuxConfig) = auxValue;
             }
         } else {
             cliShowArgumentRangeError("channel", 0, MAX_AUX_CHANNEL_COUNT - 1);
