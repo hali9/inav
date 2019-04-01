@@ -167,6 +167,7 @@ void rxUpdateRSSISource(void);
 bool rxUpdateCheck(timeUs_t currentTimeUs, timeDelta_t currentDeltaTime);
 bool rxIsReceivingSignal(void);
 bool rxAreFlightChannelsValid(void);
+bool rxAreAuxChannelsValid(void);
 bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs);
 void applyAuxChannelsOnFailsafe();
 
