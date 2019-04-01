@@ -666,7 +666,7 @@ static void updateRSSIPWM(void)
     // Read value of AUX channel as rssi
     unsigned rssiChannel = rxConfig()->rssi_channel;
     if (rssiChannel > 0) {
-        int16_t auxFail = *rxChannelAuxConfigs(rssiChannel);
+        int16_t auxFail = ABS(*rxChannelAuxConfigs(rssiChannel));
         if (!(rxFlightChannelsValid && rxAuxChannelsValid && rxSignalReceived) && auxFail > 1) {
             pwmRssi = auxFail;
         } else {
