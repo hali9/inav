@@ -1131,7 +1131,7 @@ static void cliRxRange(char *cmdline)
 
 static void printRxAux(uint8_t dumpMask, const int16_t *channelAuxConfigs, const int16_t *defaultChannelAuxConfigs)
 {
-    const char *format = "rxaux %u %u";
+    const char *format = "rxaux %u %d";
     for (uint8_t i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
         bool equalsDefault = false;
         if (defaultChannelAuxConfigs) {
@@ -1157,8 +1157,7 @@ static void cliRxAux(char *cmdline)
 	printRxAux(DUMP_MASTER, rxChannelAuxConfigs(0), NULL);
     } else if (sl_strcasecmp(cmdline, "reset") == 0) {
 	for (int i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
-            int16_t *channelAuxConfig = rxChannelAuxConfigsMutable(i);
-            (*channelAuxConfig) = 0;
+            (*rxChannelAuxConfigsMutable(i)) = 0;
         }
     } else {
         ptr = cmdline;
@@ -1174,9 +1173,9 @@ static void cliRxAux(char *cmdline)
 
             if (validArgumentCount != 1) {
                 cliShowParseError();
-            } else if ((PWM_PULSE_MIN <= auxValue && auxValue <= PWM_PULSE_MAX) || auxValue == 0 || auxValue == 1) {
-                int16_t *channelAuxConfig = rxChannelAuxConfigsMutable(i);
-                (*channelAuxConfig) = auxValue;
+            } else if ((PWM_PULSE_MIN <= auxValue && auxValue <= PWM_PULSE_MAX) || auxValue == 1
+		    || (-PWM_PULSE_MAX <= auxValue && auxValue <= -PWM_PULSE_MIN) || auxValue == 0) {
+                (*rxChannelAuxConfigsMutable(i)) = auxValue;
             } else {
                 cliShowParseError();
             }
