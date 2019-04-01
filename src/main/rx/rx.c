@@ -542,7 +542,7 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
                 if (channel < NON_AUX_CHANNEL_COUNT) {
                     rxFlightChannelsValid = false;
                 } else {
-                    int16_t auxFail = *rxChannelAuxConfigs(channel);
+                    int16_t auxFail = *rxChannelAuxConfigs(channel - NON_AUX_CHANNEL_COUNT);
                     if (auxFail > 0) {
                         rxAuxChannelsValid = false;
                     }
@@ -584,7 +584,7 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
 
 void applyAuxChannelsOnFailsafe() {
     for (int channel = NON_AUX_CHANNEL_COUNT; channel < rxRuntimeConfig.channelCount; channel++) {
-        int16_t auxFail = ABS(*rxChannelAuxConfigs(channel));
+        int16_t auxFail = ABS(*rxChannelAuxConfigs(channel - NON_AUX_CHANNEL_COUNT));
         if (auxFail > 1) {
             rcChannels[channel].data = auxFail;
         }
@@ -666,7 +666,8 @@ static void updateRSSIPWM(void)
     // Read value of AUX channel as rssi
     unsigned rssiChannel = rxConfig()->rssi_channel;
     if (rssiChannel > 0) {
-        int16_t auxFail = ABS(*rxChannelAuxConfigs(rssiChannel));
+        int16_t auxFail = 0;
+        if (rssiChannel - NON_AUX_CHANNEL_COUNT > 0) auxFail = ABS(*rxChannelAuxConfigs(rssiChannel));
         if (!(rxFlightChannelsValid && rxAuxChannelsValid && rxSignalReceived) && auxFail > 1) {
             pwmRssi = auxFail;
         } else {
