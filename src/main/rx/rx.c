@@ -543,7 +543,7 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
                     rxFlightChannelsValid = false;
                 } else {
                     int16_t auxFail = *rxChannelAuxConfigs(channel);
-                    if (auxFail) {
+                    if (auxFail > 0) {
                         rxAuxChannelsValid = false;
                     }
                 }
@@ -584,7 +584,7 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
 
 void applyAuxChannelsOnFailsafe() {
     for (int channel = NON_AUX_CHANNEL_COUNT; channel < rxRuntimeConfig.channelCount; channel++) {
-        int16_t auxFail = *rxChannelAuxConfigs(channel);
+        int16_t auxFail = ABS(*rxChannelAuxConfigs(channel));
         if (auxFail > 1) {
             rcChannels[channel].data = auxFail;
         }
