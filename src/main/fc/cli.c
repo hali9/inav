@@ -1360,7 +1360,7 @@ static void cliWaypoints(char *cmdline)
                 posControl.waypointList[i].lon = lon;
                 posControl.waypointList[i].alt = alt;
                 posControl.waypointList[i].p1 = p1;
-                posControl.waypointList[i].p1 = p2;
+                posControl.waypointList[i].p2 = p2;
                 posControl.waypointList[i].flag = flag;
             }
         } else {
