@@ -2526,6 +2526,23 @@ int getWaypointCount(void)
 }
 
 #ifdef NAV_NON_VOLATILE_WAYPOINT_STORAGE
+
+#ifdef(NAV_NON_VOLATILE_WAYPOINT_CLI)
+void calculateFromRelativeWaypoint(navWaypoint_t * previous, navWaypoint_t * waypoint) {
+    if (waypoint->action == NAV_WP_ACTION_RELATIVE) { //waypoint->lat is distance, waypoint->lon is course
+        fpVector3_t localPos;
+        mapWaypointToLocalPosition(&localPos, previous);
+        localPos.x += waypoint->lat * cos_approx(waypoint->lon);
+        localPos.y += waypoint->lat * sin_approx(waypoint->lon);
+        gpsLocation_t wpLLH;
+        geoConvertLocalToGeodetic(&wpLLH, &posControl.gpsOrigin, &localPos);
+        waypoint->lat = wpLLH.lat;
+        waypoint->lon = wpLLH.lon;
+        waypoint->action = NAV_WP_ACTION_WAYPOINT;
+    }
+}
+#endif
+
 bool loadNonVolatileWaypointList(void)
 {
     if (ARMING_FLAG(ARMED))
@@ -2535,7 +2552,17 @@ bool loadNonVolatileWaypointList(void)
 
     for (int i = 0; i < NAV_MAX_WAYPOINTS; i++) {
         // Load waypoint
-        setWaypoint(i + 1, nonVolatileWaypointList(i));
+        navWaypoint_t navWaypoint = *nonVolatileWaypointList(i);
+#ifdef(NAV_NON_VOLATILE_WAYPOINT_CLI)
+        navWaypoint_t previusWaypoint;
+        if (i > 0) {
+            previusWaypoint = *nonVolatileWaypointList(i-1);
+        } else {
+            previusWaypoint.lat = gpsSol.llh.lat;
+            previusWaypoint.lon = gpsSol.llh.lon;
+        }
+#endif
+        calculateFromRelativeWaypoint(&previusWaypoint, &navWaypoint);
 
         // Check if this is the last waypoint
         if (nonVolatileWaypointList(i)->flag == NAV_WP_FLAG_LAST)
