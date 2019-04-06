@@ -2561,8 +2561,8 @@ bool loadNonVolatileWaypointList(void)
             previusWaypoint.lat = gpsSol.llh.lat;
             previusWaypoint.lon = gpsSol.llh.lon;
         }
-#endif
         calculateFromRelativeWaypoint(&previusWaypoint, &navWaypoint);
+#endif
 
         // Check if this is the last waypoint
         if (nonVolatileWaypointList(i)->flag == NAV_WP_FLAG_LAST)
