@@ -2528,8 +2528,9 @@ int getWaypointCount(void)
 #ifdef NAV_NON_VOLATILE_WAYPOINT_STORAGE
 
 #ifdef(NAV_NON_VOLATILE_WAYPOINT_CLI)
-void calculateFromRelativeWaypoint(navWaypoint_t * previous, navWaypoint_t * waypoint) {
+bool calculateFromRelativeWaypoint(navWaypoint_t * previous, navWaypoint_t * waypoint) {
     if (waypoint->action == NAV_WP_ACTION_RELATIVE) { //waypoint->lat is distance, waypoint->lon is course
+        if (!posControl.gpsOrigin.valid) return false;
         fpVector3_t localPos;
         mapWaypointToLocalPosition(&localPos, previous);
         localPos.x += waypoint->lat * cos_approx(waypoint->lon);
@@ -2540,6 +2541,7 @@ void calculateFromRelativeWaypoint(navWaypoint_t * previous, navWaypoint_t * way
         waypoint->lon = wpLLH.lon;
         waypoint->action = NAV_WP_ACTION_WAYPOINT;
     }
+    return true;
 }
 #endif
 
@@ -2552,19 +2554,27 @@ bool loadNonVolatileWaypointList(void)
 
     for (int i = 0; i < NAV_MAX_WAYPOINTS; i++) {
         // Load waypoint
-        navWaypoint_t navWaypoint = *nonVolatileWaypointList(i);
 #ifdef(NAV_NON_VOLATILE_WAYPOINT_CLI)
-        navWaypoint_t previusWaypoint;
-        if (i > 0) {
-            previusWaypoint = *nonVolatileWaypointList(i-1);
-        } else {
-            previusWaypoint.lat = gpsSol.llh.lat;
-            previusWaypoint.lon = gpsSol.llh.lon;
+        navWaypoint_t navWaypoint = *nonVolatileWaypointList(i);
+        if (posControl.flags.estPosStatus >= EST_USABLE) {
+            navWaypoint_t previusWaypoint;
+            if (i > 0) {
+                previusWaypoint = *nonVolatileWaypointList(i-1);
+            } else {
+                previusWaypoint.lat = gpsSol.llh.lat;
+                previusWaypoint.lon = gpsSol.llh.lon;
+            }
+            bool calcOk = calculateFromRelativeWaypoint(&previusWaypoint, &navWaypoint);
+            if (!calkOk) {
+                posControl.waypointListValid = false;
+                break;
+            }
         }
-        calculateFromRelativeWaypoint(&previusWaypoint, &navWaypoint);
-#endif
         setWaypoint(i + 1, navWaypoint);
-
+#else
+        setWaypoint(i + 1, nonVolatileWaypointList(i));
+#endif
+        
         // Check if this is the last waypoint
         if (nonVolatileWaypointList(i)->flag == NAV_WP_FLAG_LAST)
             break;
