@@ -2563,6 +2563,7 @@ bool loadNonVolatileWaypointList(void)
         }
         calculateFromRelativeWaypoint(&previusWaypoint, &navWaypoint);
 #endif
+        setWaypoint(i + 1, navWaypoint);
 
         // Check if this is the last waypoint
         if (nonVolatileWaypointList(i)->flag == NAV_WP_FLAG_LAST)
