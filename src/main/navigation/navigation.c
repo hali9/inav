@@ -2566,7 +2566,7 @@ bool calculateFromRelativeWaypoint(bool checkRelativeCalculate, int wpNumer, nav
 }
 #endif
 
-bool loadNonVolatileWaypointList(void)
+bool loadNonVolatileWaypointList(bool checkRelativeCalculate)
 {
     if (ARMING_FLAG(ARMED))
         return false;
