@@ -2495,7 +2495,12 @@ void setWaypoint(uint8_t wpNumber, const navWaypoint_t * wpData)
     }
     // WP #1 - #15 - common waypoints - pre-programmed mission
     else if ((wpNumber >= 1) && (wpNumber <= NAV_MAX_WAYPOINTS) && !ARMING_FLAG(ARMED)) {
-        if (wpData->action == NAV_WP_ACTION_WAYPOINT || wpData->action == NAV_WP_ACTION_RTH || wpData->action == NAV_WP_ACTION_RELATIVE) {
+        if (wpData->action == NAV_WP_ACTION_WAYPOINT
+         || wpData->action == NAV_WP_ACTION_RTH
+#ifdef NAV_NON_VOLATILE_WAYPOINT_CLI
+         || wpData->action == NAV_WP_ACTION_RELATIVE
+#endif
+           ) {
             // Only allow upload next waypoint (continue upload mission) or first waypoint (new mission)
             if (wpNumber == (posControl.waypointCount + 1) || wpNumber == 1) {
                 posControl.waypointList[wpNumber - 1] = *wpData;
