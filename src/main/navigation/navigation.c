@@ -1418,7 +1418,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_WAIT(navigatio
     UNUSED(previousState);
 
     uint32_t wait = posControl.waypointList[posControl.activeWaypointIndex].p2 > 0 ? posControl.waypointList[posControl.activeWaypointIndex].p2 : 0;
-    if ((millis() - posControl.lastWaypointReachedAt) / 1000000 >= wait) {
+    if ((millis() - posControl.lastWaypointReachedAt) >= wait * 1000) {
         return NAV_FSM_EVENT_SUCCESS;   // NAV_STATE_WAYPOINT_NEXT
     } else {
         return NAV_FSM_EVENT_NONE;
