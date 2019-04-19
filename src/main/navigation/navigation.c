@@ -1335,6 +1335,9 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_INITIALIZE(nav
         resetAltitudeController(false);
         setupAltitudeController();
 
+        posControl.lastWaypoint.pos = navGetCurrentActualPositionAndVelocity()->pos;
+        posControl.lastWaypoint.yaw = posControl.actualState.yaw;
+
         posControl.activeWaypointIndex = 0;
         return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_PRE_ACTION
     }
@@ -1376,7 +1379,18 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                 }
                 else {
                     // Update XY-position target to active waypoint
-                    setDesiredPosition(&posControl.activeWaypoint.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_BEARING);
+                    if (STATE(FIXED_WING)) {
+                        setDesiredPosition(&posControl.activeWaypoint.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_BEARING);
+                    } else {
+                        const float deltaX = posControl.activeWaypoint.pos.x - posControl.lastWaypoint.pos.x;
+                        const float deltaY = posControl.activeWaypoint.pos.y - posControl.lastWaypoint.pos.y;
+                        int32_t lwpAwpDist = calculateDistanceFromDelta(deltaX, deltaY); //between last waypoint and active waypoint
+                        int32_t activeDist = calculateDistanceToDestination(&posControl.activeWaypoint.pos); //from current position to active waypoint
+                        int32_t lastYaw = posControl.lastWaypoint.yaw;
+                        int32_t activeYaw = posControl.waypointList[posControl.activeWaypointIndex].p3 * 100;
+                        int32_t head = scaleRange(activeDist, 0, lwpAwpDist, activeYaw, lastYaw);
+                        setDesiredPosition(&posControl.activeWaypoint.pos, head, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING);
+                    }
                     return NAV_FSM_EVENT_NONE;      // will re-process state in >10ms
                 }
                 break;
@@ -1394,6 +1408,9 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(navigationFSMState_t previousState)
 {
     UNUSED(previousState);
+
+    posControl.lastWaypoint.pos = posControl.activeWaypoint.pos;
+    posControl.lastWaypoint.yaw = posControl.waypointList[posControl.activeWaypointIndex].p3;
 
     switch (posControl.waypointList[posControl.activeWaypointIndex].action) {
         case NAV_WP_ACTION_RTH:
