@@ -1379,7 +1379,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                 }
                 else {
                     // Update XY-position target to active waypoint
-                    if (STATE(FIXED_WING)) {
+                    if (STATE(FIXED_WING) || posControl.waypointList[posControl.activeWaypointIndex].p3 == 0) {
                         setDesiredPosition(&posControl.activeWaypoint.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_BEARING);
                     } else {
                         const float deltaX = posControl.activeWaypoint.pos.x - posControl.lastWaypoint.pos.x;
