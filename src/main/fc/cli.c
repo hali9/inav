@@ -1129,6 +1129,62 @@ static void cliRxRange(char *cmdline)
     }
 }
 
+static void printRxAux(uint8_t dumpMask, const int16_t *channelAuxConfigs, const int16_t *defaultChannelAuxConfigs)
+{
+    const char *format = "rxaux %u %d";
+    for (uint8_t i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+        bool equalsDefault = false;
+        if (defaultChannelAuxConfigs) {
+            equalsDefault = channelAuxConfigs[i] == defaultChannelAuxConfigs[i];
+            cliDefaultPrintLinef(dumpMask, equalsDefault, format,
+                i,
+                defaultChannelAuxConfigs[i]
+            );
+        }
+        cliDumpPrintLinef(dumpMask, equalsDefault, format,
+            i,
+            channelAuxConfigs[i]
+        );
+    }
+}
+
+static void cliRxAux(char *cmdline)
+{
+    int i, validArgumentCount = 0;
+    const char *ptr;
+
+    if (isEmpty(cmdline)) {
+	printRxAux(DUMP_MASTER, rxChannelAuxConfigs(0), NULL);
+    } else if (sl_strcasecmp(cmdline, "reset") == 0) {
+	for (int i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+            (*rxChannelAuxConfigsMutable(i)) = 0;
+        }
+    } else {
+        ptr = cmdline;
+        i = fastA2I(ptr);
+        if (i >= 0 && i < MAX_AUX_CHANNEL_COUNT) {
+            int auxValue;
+
+            ptr = nextArg(ptr);
+            if (ptr) {
+                auxValue = fastA2I(ptr);
+                validArgumentCount++;
+            }
+
+            if (validArgumentCount != 1) {
+                cliShowParseError();
+            } else if ((PWM_PULSE_MIN <= auxValue && auxValue <= PWM_PULSE_MAX) || auxValue == 1
+		    || (-PWM_PULSE_MAX <= auxValue && auxValue <= -PWM_PULSE_MIN) || auxValue == 0) {
+                (*rxChannelAuxConfigsMutable(i)) = auxValue;
+            } else {
+                cliShowParseError();
+            }
+        } else {
+            cliShowArgumentRangeError("channel", 0, MAX_AUX_CHANNEL_COUNT - 1);
+        }
+    }
+}
+
 #ifdef USE_TEMPERATURE_SENSOR
 static void printTempSensor(uint8_t dumpMask, const tempSensorConfig_t *tempSensorConfigs, const tempSensorConfig_t *defaultTempSensorConfigs)
 {
@@ -1290,11 +1346,13 @@ static void cliWaypoints(char *cmdline)
     } else if (sl_strcasecmp(cmdline, "reset") == 0) {
         resetWaypointList();
     } else if (sl_strcasecmp(cmdline, "load") == 0) {
-        loadNonVolatileWaypointList();
+        loadNonVolatileWaypointList(false);
     } else if (sl_strcasecmp(cmdline, "save") == 0) {
         posControl.waypointListValid = false;
         for (int i = 0; i < NAV_MAX_WAYPOINTS; i++) {
-            if (!(posControl.waypointList[i].action == NAV_WP_ACTION_WAYPOINT || posControl.waypointList[i].action == NAV_WP_ACTION_RTH)) break;
+            if (!(posControl.waypointList[i].action == NAV_WP_ACTION_WAYPOINT
+               || posControl.waypointList[i].action == NAV_WP_ACTION_RTH
+               || posControl.waypointList[i].action == NAV_WP_ACTION_RELATIVE)) break;
             if (posControl.waypointList[i].flag == NAV_WP_FLAG_LAST) {
                 posControl.waypointCount = i + 1;
                 posControl.waypointListValid = true;
@@ -1351,8 +1409,10 @@ static void cliWaypoints(char *cmdline)
             }
             if (validArgumentCount < 7) {
                 cliShowParseError();
-            } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH)
-		     || (p1 < 0) || (p2 < 0) || !(flag == 0 || flag == NAV_WP_FLAG_LAST)) {
+            } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH || action == NAV_WP_ACTION_RELATIVE)
+                    || (p1 < 0) || (p2 < 0)
+                    || !(flag == 0 || flag == NAV_WP_FLAG_LAST)
+                    || (action == NAV_WP_ACTION_RELATIVE && (lat < 0 || lat * 100 > navConfig()->general.waypoint_safe_distance || lon < 0 || lon > 359))) {
                 cliShowParseError();
             } else {
                 posControl.waypointList[i].action = action;
@@ -3009,6 +3069,9 @@ static void printConfig(const char *cmdline, bool doDiff)
         cliPrintHashLine("adjrange");
         printAdjustmentRange(dumpMask, adjustmentRanges_CopyArray, adjustmentRanges(0));
 
+	cliPrintHashLine("rxaux");
+        printRxAux(dumpMask, rxChannelAuxConfigs_CopyArray, rxChannelAuxConfigs(0));
+	    
         cliPrintHashLine("rxrange");
         printRxRange(dumpMask, rxChannelRangeConfigs_CopyArray, rxChannelRangeConfigs(0));
 
@@ -3164,6 +3227,7 @@ const clicmd_t cmdTable[] = {
 #if !defined(SKIP_TASK_STATISTICS) && !defined(SKIP_CLI_RESOURCES)
     CLI_COMMAND_DEF("resource", "view currently used resources", NULL, cliResource),
 #endif
+    CLI_COMMAND_DEF("rxaux", "configure rx aux failsafe", NULL, cliRxAux),
     CLI_COMMAND_DEF("rxrange", "configure rx channel ranges", NULL, cliRxRange),
     CLI_COMMAND_DEF("save", "save and reboot", NULL, cliSave),
     CLI_COMMAND_DEF("serial", "configure serial ports", NULL, cliSerial),
