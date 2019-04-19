@@ -1388,7 +1388,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                         int32_t activeDist = calculateDistanceToDestination(&posControl.activeWaypoint.pos); //from current position to active waypoint
                         int32_t lastYaw = posControl.lastWaypoint.yaw;
                         int32_t activeYaw = posControl.waypointList[posControl.activeWaypointIndex].p3 * 100;
-                        int32_t head = scaleRange(activeDist, 0, lwpAwpDist, activeYaw, lastYaw);
+                        int32_t head = scaleRange(activeDist, lwpAwpDist, 0, lastYaw, activeYaw);
                         setDesiredPosition(&posControl.activeWaypoint.pos, head, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING);
                     }
                     return NAV_FSM_EVENT_NONE;      // will re-process state in >10ms
@@ -1410,7 +1410,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(naviga
     UNUSED(previousState);
 
     posControl.lastWaypoint.pos = posControl.activeWaypoint.pos;
-    posControl.lastWaypoint.yaw = posControl.waypointList[posControl.activeWaypointIndex].p3 * 100;
+    posControl.lastWaypoint.yaw = ABS(posControl.waypointList[posControl.activeWaypointIndex].p3) * 100;
 
     switch (posControl.waypointList[posControl.activeWaypointIndex].action) {
         case NAV_WP_ACTION_RTH:
