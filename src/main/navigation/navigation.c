@@ -1382,13 +1382,17 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                     if (STATE(FIXED_WING) || posControl.waypointList[posControl.activeWaypointIndex].p3 == 0) {
                         setDesiredPosition(&posControl.activeWaypoint.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_BEARING);
                     } else {
-                        const float deltaX = posControl.activeWaypoint.pos.x - posControl.lastWaypoint.pos.x;
-                        const float deltaY = posControl.activeWaypoint.pos.y - posControl.lastWaypoint.pos.y;
-                        int32_t lwpAwpDist = calculateDistanceFromDelta(deltaX, deltaY); //between last waypoint and active waypoint
-                        int32_t activeDist = calculateDistanceToDestination(&posControl.activeWaypoint.pos); //from current position to active waypoint
-                        int32_t lastYaw = posControl.lastWaypoint.yaw;
+                        float deltaX = posControl.activeWaypoint.pos.x - posControl.lastWaypoint.pos.x;
+                        float deltaY = posControl.activeWaypoint.pos.y - posControl.lastWaypoint.pos.y;
                         int32_t activeYaw = posControl.waypointList[posControl.activeWaypointIndex].p3 * 100;
-                        int32_t head = scaleRange(activeDist, lwpAwpDist, 0, lastYaw, activeYaw);
+                        int32_t angle = ABS(activeYaw) - posControl.lastWaypoint.yaw;
+                        if (angle < 0) angle += 36000;
+                        if (activeYaw < 0) angle = -angle; //counterclockwise
+                        int32_t head = scaleRange(
+                            calculateDistanceToDestination(&posControl.activeWaypoint.pos), //from current position to active waypoint
+                            calculateDistanceFromDelta(deltaX, deltaY), //between last waypoint and active waypoint                    
+                            0, 0, angle) + posControl.lastWaypoint.yaw;
+                        if (head > 36000) head -= 36000;
                         setDesiredPosition(&posControl.activeWaypoint.pos, head, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING);
                     }
                     return NAV_FSM_EVENT_NONE;      // will re-process state in >10ms
