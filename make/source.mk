@@ -45,6 +45,7 @@ COMMON_SRC = \
             drivers/rx_spi.c \
             drivers/rx_xn297.c \
             drivers/pitotmeter_adc.c \
+            drivers/pitotmeter_virtual.c \
             drivers/pwm_esc_detect.c \
             drivers/pwm_mapping.c \
             drivers/pwm_output.c \
@@ -194,6 +195,7 @@ COMMON_SRC = \
             telemetry/mavlink.c \
             telemetry/msp_shared.c \
             telemetry/smartport.c \
+            telemetry/sim.c \
             telemetry/telemetry.c \
             io/vtx.c \
             io/vtx_string.c \
