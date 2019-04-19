@@ -1410,7 +1410,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(naviga
     UNUSED(previousState);
 
     posControl.lastWaypoint.pos = posControl.activeWaypoint.pos;
-    posControl.lastWaypoint.yaw = posControl.waypointList[posControl.activeWaypointIndex].p3;
+    posControl.lastWaypoint.yaw = posControl.waypointList[posControl.activeWaypointIndex].p3 * 100;
 
     switch (posControl.waypointList[posControl.activeWaypointIndex].action) {
         case NAV_WP_ACTION_RTH:
