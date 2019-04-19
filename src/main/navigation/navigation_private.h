@@ -349,6 +349,7 @@ typedef struct {
 
     navWaypointPosition_t       activeWaypoint;     // Local position and initial bearing, filled on waypoint activation
     int8_t                      activeWaypointIndex;
+    navWaypointPosition_t       lastWaypoint; 
     uint32_t                    lastWaypointReachedAt;
 
     /* Internals & statistics */
