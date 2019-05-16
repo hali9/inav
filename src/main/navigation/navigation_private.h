@@ -361,6 +361,7 @@ void navPidInit(pidController_t *pid, float _kP, float _kI, float _kD, float _kF
 void navPInit(pController_t *p, float _kP);
 
 bool isThrustFacingDownwards(void);
+uint32_t calculateDistance(const fpVector3_t * fromPos, const fpVector3_t * toPos);
 uint32_t calculateDistanceToDestination(const fpVector3_t * destinationPos);
 int32_t calculateBearingToDestination(const fpVector3_t * destinationPos);
 void resetLandingDetector(void);
