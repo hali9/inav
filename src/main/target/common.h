@@ -18,7 +18,7 @@
 #pragma once
 
 #if defined(STM32F3)
-#define DYNAMIC_HEAP_SIZE   1024
+#define DYNAMIC_HEAP_SIZE   1536
 #else
 #define DYNAMIC_HEAP_SIZE   2048
 #endif
@@ -102,7 +102,6 @@
 #define USE_BOOTLOG
 #define BOOTLOG_DESCRIPTIONS
 
-#define NAV_NON_VOLATILE_WAYPOINT_CLI
 #else // FLASH_SIZE < 256
 #define LOG_LEVEL_MAXIMUM LOG_LEVEL_ERROR
 #endif
@@ -123,6 +122,7 @@
 #define USE_GPS_PROTO_MTK
 #define NAV_AUTO_MAG_DECLINATION
 #define NAV_GPS_GLITCH_DETECTION
+#define NAV_NON_VOLATILE_WAYPOINT_CLI
 #define NAV_NON_VOLATILE_WAYPOINT_STORAGE
 #define USE_TELEMETRY_HOTT
 #define USE_TELEMETRY_IBUS
@@ -151,9 +151,7 @@
 #define USE_VTX_TRAMP
 #define USE_VTX_FFPV
 
-#ifndef STM32F3 //F3 series does not have enoug RAM to support logic conditions
 #define USE_LOGIC_CONDITIONS
-#endif
 
 //Enable DST calculations
 #define RTC_AUTOMATIC_DST
