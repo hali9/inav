@@ -1382,15 +1382,13 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                     if (STATE(FIXED_WING) || posControl.waypointList[posControl.activeWaypointIndex].p3 == 0) {
                         setDesiredPosition(&posControl.activeWaypoint.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_BEARING);
                     } else {
-                        float deltaX = posControl.activeWaypoint.pos.x - posControl.lastWaypoint.pos.x;
-                        float deltaY = posControl.activeWaypoint.pos.y - posControl.lastWaypoint.pos.y;
                         int32_t activeYaw = posControl.waypointList[posControl.activeWaypointIndex].p3 * 100;
                         int32_t angle = ABS(activeYaw) - posControl.lastWaypoint.yaw;
                         if (angle < 0) angle += 36000;
                         if (activeYaw < 0) angle = -angle; //counterclockwise
                         int32_t head = scaleRange(
                             calculateDistanceToDestination(&posControl.activeWaypoint.pos), //from current position to active waypoint
-                            calculateDistanceFromDelta(deltaX, deltaY), //between last waypoint and active waypoint                    
+                            calculateDistance(&posControl.activeWaypoint.pos, &posControl.lastWaypoint.pos), //between last waypoint and active waypoint                    
                             0, 0, angle) + posControl.lastWaypoint.yaw;
                         setDesiredPosition(&posControl.activeWaypoint.pos, wrap_36000(head), NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING);
                     }
@@ -1947,6 +1945,14 @@ static uint32_t calculateDistanceFromDelta(float deltaX, float deltaY)
 static int32_t calculateBearingFromDelta(float deltaX, float deltaY)
 {
     return wrap_36000(RADIANS_TO_CENTIDEGREES(atan2_approx(deltaY, deltaX)));
+}
+
+uint32_t calculateDistance(const fpVector3_t * fromPos, const fpVector3_t * toPos)
+{
+    const float deltaX = fromPos->x - toPos->x;
+    const float deltaY = fromPos->y - toPos->y;
+
+    return calculateDistanceFromDelta(deltaX, deltaY);
 }
 
 uint32_t calculateDistanceToDestination(const fpVector3_t * destinationPos)
