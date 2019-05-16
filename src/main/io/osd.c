@@ -54,7 +54,7 @@
 #include "config/parameter_group_ids.h"
 
 #include "drivers/display.h"
-#include "drivers/max7456_symbols.h"
+#include "drivers/osd_symbols.h"
 #include "drivers/time.h"
 #include "drivers/vtx_common.h"
 
@@ -84,6 +84,7 @@
 
 #include "rx/rx.h"
 
+#include "sensors/acceleration.h"
 #include "sensors/battery.h"
 #include "sensors/boardalignment.h"
 #include "sensors/diagnostics.h"
@@ -98,13 +99,12 @@
 #define VIDEO_BUFFER_CHARS_PAL    480
 #define IS_DISPLAY_PAL (displayScreenSize(osdDisplayPort) == VIDEO_BUFFER_CHARS_PAL)
 
-#define CENTIMETERS_TO_CENTIFEET(cm)            (cm * (328 / 100.0))
-#define CENTIMETERS_TO_FEET(cm)                 (cm * (328 / 10000.0))
-#define CENTIMETERS_TO_METERS(cm)               (cm / 100)
 #define FEET_PER_MILE                           5280
 #define FEET_PER_KILOFEET                       1000 // Used for altitude
 #define METERS_PER_KILOMETER                    1000
 #define METERS_PER_MILE                         1609
+
+#define GFORCE_FILTER_TC 0.2
 
 #define DELAYED_REFRESH_RESUME_COMMAND (checkStickPosition(THR_HI) || checkStickPosition(PIT_HI))
 
@@ -137,6 +137,8 @@ static unsigned currentLayout = 0;
 static int layoutOverride = -1;
 static bool hasExtendedFont = false; // Wether the font supports characters > 256
 static timeMs_t layoutOverrideUntil = 0;
+static pt1Filter_t GForceFilter, GForceFilterAxis[XYZ_AXIS_COUNT];
+static float GForce, GForceAxis[XYZ_AXIS_COUNT];
 
 typedef struct statistic_s {
     uint16_t max_speed;
@@ -145,7 +147,7 @@ typedef struct statistic_s {
     int16_t max_power; // /100
     int16_t min_rssi;
     int32_t max_altitude;
-    uint16_t max_distance;
+    uint32_t max_distance;
 } statistic_t;
 
 static statistic_t stats;
@@ -170,6 +172,13 @@ static bool fullRedraw = false;
 
 static uint8_t armState;
 
+typedef struct osdMapData_s {
+    uint32_t scale;
+    char referenceSymbol;
+} osdMapData_t;
+
+static osdMapData_t osdMapData;
+
 static displayPort_t *osdDisplayPort;
 
 #define AH_MAX_PITCH_DEFAULT 20 // Specify default maximum AHI pitch value displayed (degrees)
@@ -181,7 +190,7 @@ static displayPort_t *osdDisplayPort;
 #define AH_SIDEBAR_WIDTH_POS 7
 #define AH_SIDEBAR_HEIGHT_POS 3
 
-PG_REGISTER_WITH_RESET_FN(osdConfig_t, osdConfig, PG_OSD_CONFIG, 5);
+PG_REGISTER_WITH_RESET_FN(osdConfig_t, osdConfig, PG_OSD_CONFIG, 8);
 
 static int digitCount(int32_t value)
 {
@@ -317,10 +326,10 @@ static void osdFormatDistanceSymbol(char *buff, int32_t dist)
         centifeet = CENTIMETERS_TO_CENTIFEET(dist);
         if (abs(centifeet) < FEET_PER_MILE * 100 / 2) {
             // Show feet when dist < 0.5mi
-            tfp_sprintf(buff, "%d%c", centifeet / 100, SYM_FT);
+            tfp_sprintf(buff, "%d%c", (int)(centifeet / 100), SYM_FT);
         } else {
             // Show miles when dist >= 0.5mi
-            tfp_sprintf(buff, "%d.%02d%c", centifeet / (100*FEET_PER_MILE),
+            tfp_sprintf(buff, "%d.%02d%c", (int)(centifeet / (100*FEET_PER_MILE)),
             (abs(centifeet) % (100 * FEET_PER_MILE)) / FEET_PER_MILE, SYM_MI);
         }
         break;
@@ -329,10 +338,10 @@ static void osdFormatDistanceSymbol(char *buff, int32_t dist)
      case OSD_UNIT_METRIC:
         if (abs(dist) < METERS_PER_KILOMETER * 100) {
             // Show meters when dist < 1km
-            tfp_sprintf(buff, "%d%c", dist / 100, SYM_M);
+            tfp_sprintf(buff, "%d%c", (int)(dist / 100), SYM_M);
         } else {
             // Show kilometers when dist >= 1km
-            tfp_sprintf(buff, "%d.%02d%c", dist / (100*METERS_PER_KILOMETER),
+            tfp_sprintf(buff, "%d.%02d%c", (int)(dist / (100*METERS_PER_KILOMETER)),
                 (abs(dist) % (100 * METERS_PER_KILOMETER)) / METERS_PER_KILOMETER, SYM_KM);
          }
          break;
@@ -367,10 +376,10 @@ static void osdFormatVelocityStr(char* buff, int32_t vel, bool _3D)
     case OSD_UNIT_UK:
         FALLTHROUGH;
     case OSD_UNIT_IMPERIAL:
-        tfp_sprintf(buff, "%3d%c", osdConvertVelocityToUnit(vel), (_3D ? SYM_3D_MPH : SYM_MPH));
+        tfp_sprintf(buff, "%3d%c", (int)osdConvertVelocityToUnit(vel), (_3D ? SYM_3D_MPH : SYM_MPH));
         break;
     case OSD_UNIT_METRIC:
-        tfp_sprintf(buff, "%3d%c", osdConvertVelocityToUnit(vel), (_3D ? SYM_3D_KMH : SYM_KMH));
+        tfp_sprintf(buff, "%3d%c", (int)osdConvertVelocityToUnit(vel), (_3D ? SYM_3D_KMH : SYM_KMH));
         break;
     }
 }
@@ -416,6 +425,8 @@ static void osdFormatWindSpeedStr(char *buff, int32_t ws, bool isValid)
 static void osdFormatAltitudeSymbol(char *buff, int32_t alt)
 {
     switch ((osd_unit_e)osdConfig()->units) {
+        case OSD_UNIT_UK:
+            FALLTHROUGH;
         case OSD_UNIT_IMPERIAL:
             if (osdFormatCentiNumber(buff + 1, CENTIMETERS_TO_CENTIFEET(alt), 1000, 0, 2, 3)) {
                 // Scaled to kft
@@ -425,8 +436,6 @@ static void osdFormatAltitudeSymbol(char *buff, int32_t alt)
                 buff[0] = SYM_ALT_FT;
             }
             break;
-        case OSD_UNIT_UK:
-            FALLTHROUGH;
         case OSD_UNIT_METRIC:
             // alt is alredy in cm
             if (osdFormatCentiNumber(buff+1, alt, 1000, 0, 2, 3)) {
@@ -450,13 +459,13 @@ static void osdFormatAltitudeStr(char *buff, int32_t alt)
     switch ((osd_unit_e)osdConfig()->units) {
         case OSD_UNIT_IMPERIAL:
             value = CENTIMETERS_TO_FEET(alt);
-            tfp_sprintf(buff, "%d%c", value, SYM_FT);
+            tfp_sprintf(buff, "%d%c", (int)value, SYM_FT);
             break;
         case OSD_UNIT_UK:
             FALLTHROUGH;
         case OSD_UNIT_METRIC:
             value = CENTIMETERS_TO_METERS(alt);
-            tfp_sprintf(buff, "%d%c", value, SYM_M);
+            tfp_sprintf(buff, "%d%c", (int)value, SYM_M);
             break;
     }
 }
@@ -471,7 +480,7 @@ static void osdFormatTime(char *buff, uint32_t seconds, char sym_m, char sym_h)
         value = seconds / 60;
     }
     buff[0] = sym;
-    tfp_sprintf(buff + 1, "%02d:%02d", value / 60, value % 60);
+    tfp_sprintf(buff + 1, "%02d:%02d", (int)(value / 60), (int)(value % 60));
 }
 
 static inline void osdFormatOnTime(char *buff)
@@ -500,28 +509,61 @@ static uint16_t osdConvertRSSI(void)
 }
 
 /**
-* Converts temperature into a string based on the current unit system
-* postfixed with a symbol to indicate the unit used.
-* @param temperature Raw temperature (i.e. as taken from getCurrentTemperature() in degC)
+* Displays a temperature postfixed with a symbol depending on the current unit system
+* @param label to display
+* @param valid true if measurement is valid
+* @param temperature in deciDegrees Celcius
 */
-static void osdFormatTemperatureSymbol(char *buff, float temperature)
+static void osdDisplayTemperature(uint8_t elemPosX, uint8_t elemPosY, uint16_t symbol, const char *label, bool valid, int16_t temperature, int16_t alarm_min, int16_t alarm_max)
 {
-    int units_symbol;
-    switch ((osd_unit_e)osdConfig()->units) {
-        case OSD_UNIT_IMPERIAL:
-            units_symbol = SYM_TEMP_F;
-            temperature = (temperature * (9.0f/5)) + 32;
-            break;
-        case OSD_UNIT_UK:
-            FALLTHROUGH;
-        case OSD_UNIT_METRIC:
-            units_symbol = SYM_TEMP_C;
-            break;
+    char buff[TEMPERATURE_LABEL_LEN + 2 < 6 ? 6 : TEMPERATURE_LABEL_LEN + 2];
+    textAttributes_t elemAttr = valid ? TEXT_ATTRIBUTES_NONE : _TEXT_ATTRIBUTES_BLINK_BIT;
+    uint8_t valueXOffset = 0;
+
+    if (symbol) {
+        buff[0] = symbol;
+        buff[1] = '\0';
+        displayWriteWithAttr(osdDisplayPort, elemPosX, elemPosY, buff, elemAttr);
+        valueXOffset = 1;
     }
-    osdFormatCentiNumber(buff, (int32_t) (temperature * 100), 0, 0, 0, 3);
-    buff[3] = units_symbol;
+#ifdef USE_TEMPERATURE_SENSOR
+    else if (label[0] != '\0') {
+        uint8_t label_len = strnlen(label, TEMPERATURE_LABEL_LEN);
+        memcpy(buff, label, label_len);
+        memset(buff + label_len, ' ', TEMPERATURE_LABEL_LEN + 1 - label_len);
+        buff[5] = '\0';
+        displayWriteWithAttr(osdDisplayPort, elemPosX, elemPosY, buff, elemAttr);
+        valueXOffset = osdConfig()->temp_label_align == OSD_ALIGN_LEFT ? 5 : label_len + 1;
+    }
+#else
+    UNUSED(label);
+#endif
+
+    if (valid) {
+
+        if ((temperature <= alarm_min) || (temperature >= alarm_max)) TEXT_ATTRIBUTES_ADD_BLINK(elemAttr);
+        if (osdConfig()->units == OSD_UNIT_IMPERIAL) temperature = temperature * 9 / 5.0f + 320;
+        tfp_sprintf(buff, "%3d", temperature / 10);
+
+    } else
+        strcpy(buff, "---");
+
+    buff[3] = osdConfig()->units == OSD_UNIT_IMPERIAL ? SYM_TEMP_F : SYM_TEMP_C;
     buff[4] = '\0';
+
+    displayWriteWithAttr(osdDisplayPort, elemPosX + valueXOffset, elemPosY, buff, elemAttr);
 }
+
+#ifdef USE_TEMPERATURE_SENSOR
+static void osdDisplayTemperatureSensor(uint8_t elemPosX, uint8_t elemPosY, uint8_t sensorIndex)
+{
+    int16_t temperature;
+    const bool valid = getSensorTemperature(sensorIndex, &temperature);
+    const tempSensorConfig_t *sensorConfig = tempSensorConfig(sensorIndex);
+    uint16_t symbol = sensorConfig->osdSymbol ? SYM_TEMP_SENSOR_FIRST + sensorConfig->osdSymbol - 1 : 0;
+    osdDisplayTemperature(elemPosX, elemPosY, symbol, sensorConfig->label, valid, temperature, sensorConfig->alarm_min, sensorConfig->alarm_max);
+}
+#endif
 
 static void osdFormatCoordinate(char *buff, char sym, int32_t val)
 {
@@ -532,11 +574,11 @@ static void osdFormatCoordinate(char *buff, char sym, int32_t val)
     int32_t integerPart = val / GPS_DEGREES_DIVIDER;
     // Latitude maximum integer width is 3 (-90) while
     // longitude maximum integer width is 4 (-180).
-    int integerDigits = tfp_sprintf(buff + 1, (integerPart == 0 && val < 0) ? "-%d" : "%d", integerPart);
+    int integerDigits = tfp_sprintf(buff + 1, (integerPart == 0 && val < 0) ? "-%d" : "%d", (int)integerPart);
     // We can show up to 7 digits in decimalPart.
     int32_t decimalPart = abs(val % GPS_DEGREES_DIVIDER);
     STATIC_ASSERT(GPS_DEGREES_DIVIDER == 1e7, adjust_max_decimal_digits);
-    int decimalDigits = tfp_sprintf(buff + 1 + integerDigits, "%07d", decimalPart);
+    int decimalDigits = tfp_sprintf(buff + 1 + integerDigits, "%07d", (int)decimalPart);
     // Embbed the decimal separator
     buff[1 + integerDigits - 1] += SYM_ZERO_HALF_TRAILING_DOT - '0';
     buff[1 + integerDigits] += SYM_ZERO_HALF_LEADING_DOT - '0';
@@ -560,10 +602,6 @@ static const char * osdArmingDisabledReasonMessage(void)
             // See handling of FAILSAFE_RX_LOSS_MONITORING in failsafe.c
             if (failsafePhase() == FAILSAFE_RX_LOSS_MONITORING) {
                 if (failsafeIsReceivingRxData()) {
-                    if (isUsingSticksForArming()) {
-                        // Need to power-cycle
-                        return OSD_MESSAGE_STR("POWER CYCLE TO ARM");
-                    }
                     // If we're not using sticks, it means the ARM switch
                     // hasn't been off since entering FAILSAFE_RX_LOSS_MONITORING
                     // yet
@@ -580,7 +618,20 @@ static const char * osdArmingDisabledReasonMessage(void)
         case ARMING_DISABLED_SYSTEM_OVERLOADED:
             return OSD_MESSAGE_STR("SYSTEM OVERLOADED");
         case ARMING_DISABLED_NAVIGATION_UNSAFE:
-            return OSD_MESSAGE_STR("NAVIGATION IS UNSAFE");
+#if defined(USE_NAV)
+            // Check the exact reason
+            switch (navigationIsBlockingArming(NULL)) {
+                case NAV_ARMING_BLOCKER_NONE:
+                    break;
+                case NAV_ARMING_BLOCKER_MISSING_GPS_FIX:
+                    return OSD_MESSAGE_STR("WAITING FOR GPS FIX");
+                case NAV_ARMING_BLOCKER_NAV_IS_ALREADY_ACTIVE:
+                    return OSD_MESSAGE_STR("DISABLE NAVIGATION FIRST");
+                case NAV_ARMING_BLOCKER_FIRST_WAYPOINT_TOO_FAR:
+                    return OSD_MESSAGE_STR("FIRST WAYPOINT IS TOO FAR");
+            }
+#endif
+            break;
         case ARMING_DISABLED_COMPASS_NOT_CALIBRATED:
             return OSD_MESSAGE_STR("COMPASS NOT CALIBRATED");
         case ARMING_DISABLED_ACCELEROMETER_NOT_CALIBRATED:
@@ -710,7 +761,7 @@ static const char * navigationStateMessage(void)
             // Used by HOLD flight modes. No information to add.
             break;
         case MW_NAV_STATE_HOLD_TIMED:
-            // Not used anymore
+            // Waypoint wait
             break;
         case MW_NAV_STATE_WP_ENROUTE:
             // TODO: Show WP number
@@ -721,7 +772,7 @@ static const char * navigationStateMessage(void)
             // Not used
             break;
         case MW_NAV_STATE_LAND_START:
-            // Not used
+            // RTH wait
             break;
         case MW_NAV_STATE_EMERGENCY_LANDING:
             return OSD_MESSAGE_STR("EMERGENCY LANDING");
@@ -801,7 +852,7 @@ static void osdFormatThrottlePosition(char *buff, bool autoThr, textAttributes_t
 {
     buff[0] = SYM_BLANK;
     buff[1] = SYM_THR;
-    int16_t thr = rcData[THROTTLE];
+    int16_t thr = rxGetChannelValue(THROTTLE);
     if (autoThr && navigationIsControllingThrottle()) {
         buff[0] = SYM_AUTO_THR0;
         buff[1] = SYM_AUTO_THR1;
@@ -943,8 +994,6 @@ static void osdDrawMap(int referenceHeading, uint8_t referenceSym, uint8_t cente
     const int charWidth = 12;
     const int charHeight = 18;
 
-    char buf[16];
-
     uint8_t minX = hMargin;
     uint8_t maxX = osdDisplayPort->cols - 1 - hMargin;
     uint8_t minY = vMargin;
@@ -953,11 +1002,6 @@ static void osdDrawMap(int referenceHeading, uint8_t referenceSym, uint8_t cente
     uint8_t midY = osdDisplayPort->rows / 2;
 
     // Fixed marks
-    if (referenceSym) {
-        displayWriteChar(osdDisplayPort, maxX, minY, SYM_DIRECTION);
-        displayWriteChar(osdDisplayPort, maxX, minY + 1, referenceSym);
-    }
-    displayWriteChar(osdDisplayPort, minX, maxY, SYM_SCALE);
     displayWriteChar(osdDisplayPort, midX, midY, centerSym);
 
     // First, erase the previous drawing.
@@ -967,11 +1011,6 @@ static void osdDrawMap(int referenceHeading, uint8_t referenceSym, uint8_t cente
     }
 
     uint32_t initialScale;
-    float scaleToUnit;
-    int scaleUnitDivisor;
-    char symUnscaled;
-    char symScaled;
-    int maxDecimals;
     const unsigned scaleMultiplier = 2;
     // We try to reduce the scale when the POI will be around half the distance
     // between the center and the closers map edge, to avoid too much jumping
@@ -980,21 +1019,11 @@ static void osdDrawMap(int referenceHeading, uint8_t referenceSym, uint8_t cente
     switch (osdConfig()->units) {
         case OSD_UNIT_IMPERIAL:
             initialScale = 16; // 16m ~= 0.01miles
-            scaleToUnit = 100 / 1609.3440f; // scale to 0.01mi for osdFormatCentiNumber()
-            scaleUnitDivisor = 0;
-            symUnscaled = SYM_MI;
-            symScaled = SYM_MI;
-            maxDecimals = 2;
             break;
         case OSD_UNIT_UK:
             FALLTHROUGH;
         case OSD_UNIT_METRIC:
             initialScale = 10; // 10m as initial scale
-            scaleToUnit = 100; // scale to cm for osdFormatCentiNumber()
-            scaleUnitDivisor = 1000; // Convert to km when scale gets bigger than 999m
-            symUnscaled = SYM_M;
-            symScaled = SYM_KM;
-            maxDecimals = 0;
             break;
     }
 
@@ -1077,12 +1106,11 @@ static void osdDrawMap(int referenceHeading, uint8_t referenceSym, uint8_t cente
         }
     }
 
-    // Draw the used scale
-    bool scaled = osdFormatCentiNumber(buf, scale * scaleToUnit, scaleUnitDivisor, maxDecimals, 2, 3);
-    buf[3] = scaled ? symScaled : symUnscaled;
-    buf[4] = '\0';
-    displayWrite(osdDisplayPort, minX + 1, maxY, buf);
     *usedScale = scale;
+
+    // Update global map data for scale and reference
+    osdMapData.scale = scale;
+    osdMapData.referenceSymbol = referenceSym;
 }
 
 /* Draws a map with the home in the center and the craft moving around.
@@ -1221,7 +1249,7 @@ static bool osdDrawSingleElement(uint8_t item)
 
     case OSD_MAH_DRAWN:
         buff[0] = SYM_MAH;
-        tfp_sprintf(buff + 1, "%-4d", getMAhDrawn());
+        tfp_sprintf(buff + 1, "%-4d", (int)getMAhDrawn());
         osdUpdateBatteryCapacityOrVoltageTextAttributes(&elemAttr);
         break;
 
@@ -1293,14 +1321,20 @@ static bool osdDrawSingleElement(uint8_t item)
     case OSD_HOME_DIR:
         {
             if (STATE(GPS_FIX) && STATE(GPS_FIX_HOME) && isImuHeadingValid()) {
-                // There are 16 orientations for the home direction arrow.
-                // so we use 22.5deg per image, where the 1st image is used
-                // for [349, 11], the 2nd for [12, 33], etc...
-                int homeDirection = GPS_directionToHome - DECIDEGREES_TO_DEGREES(osdGetHeading());
-                // Add 11 to the angle, so first character maps to [349, 11]
-                int homeArrowDir = osdGetHeadingAngle(homeDirection + 11);
-                unsigned arrowOffset = homeArrowDir * 2 / 45;
-                buff[0] = SYM_ARROW_UP + arrowOffset;
+                if (GPS_distanceToHome < (navConfig()->general.min_rth_distance / 100) ) {
+                    buff[0] = SYM_HOME_NEAR;
+                }
+                else
+                {
+                    // There are 16 orientations for the home direction arrow.
+                    // so we use 22.5deg per image, where the 1st image is used
+                    // for [349, 11], the 2nd for [12, 33], etc...
+                    int homeDirection = GPS_directionToHome - DECIDEGREES_TO_DEGREES(osdGetHeading());
+                    // Add 11 to the angle, so first character maps to [349, 11]
+                    int homeArrowDir = osdGetHeadingAngle(homeDirection + 11);
+                    unsigned arrowOffset = homeArrowDir * 2 / 45;
+                    buff[0] = SYM_ARROW_UP + arrowOffset;
+                }
             } else {
                 // No home or no fix or unknown heading, blink.
                 // If we're unarmed, show the arrow pointing up so users can see the arrow
@@ -1565,7 +1599,7 @@ static bool osdDrawSingleElement(uint8_t item)
                 p = "ANGL";
             else if (FLIGHT_MODE(HORIZON_MODE))
                 p = "HOR ";
-            else if (isAirmodeActive())
+            else if (STATE(AIRMODE_ACTIVE))
                 p = "AIR ";
 
             displayWrite(osdDisplayPort, elemPosX, elemPosY, p);
@@ -1692,7 +1726,7 @@ static bool osdDrawSingleElement(uint8_t item)
                 }
             }
 
-            if (ABS(ky) < ABS(kx)) {
+            if (fabsf(ky) < fabsf(kx)) {
 
                 previous_orient = 0;
 
@@ -1775,8 +1809,8 @@ static bool osdDrawSingleElement(uint8_t item)
             }
 
             // AH level indicators
-            displayWriteChar(osdDisplayPort, elemPosX - hudwidth + 1, elemPosY, SYM_AH_LEFT);
-            displayWriteChar(osdDisplayPort, elemPosX + hudwidth - 1, elemPosY, SYM_AH_RIGHT);
+            displayWriteChar(osdDisplayPort, elemPosX - hudwidth + 1, elemPosY, SYM_AH_RIGHT);
+            displayWriteChar(osdDisplayPort, elemPosX + hudwidth - 1, elemPosY, SYM_AH_LEFT);
 
             return true;
         }
@@ -1825,13 +1859,13 @@ static bool osdDrawSingleElement(uint8_t item)
             int16_t value = getEstimatedActualVelocity(Z);
             char sym;
             switch ((osd_unit_e)osdConfig()->units) {
+                case OSD_UNIT_UK:
+                    FALLTHROUGH;
                 case OSD_UNIT_IMPERIAL:
                     // Convert to centifeet/s
                     value = CENTIMETERS_TO_CENTIFEET(value);
                     sym = SYM_FTS;
                     break;
-                case OSD_UNIT_UK:
-                    FALLTHROUGH;
                 case OSD_UNIT_METRIC:
                     // Already in cm/s
                     sym = SYM_MS;
@@ -2011,11 +2045,11 @@ static bool osdDrawSingleElement(uint8_t item)
             const navigationPIDControllers_t *nav_pids = getNavigationPIDControllers();
             strcpy(buff, "POSO ");
             // display requested velocity cm/s
-            tfp_sprintf(buff + 5, "%4d", lrintf(nav_pids->pos[X].output_constrained * 100));
+            tfp_sprintf(buff + 5, "%4d", (int)lrintf(nav_pids->pos[X].output_constrained * 100));
             buff[9] = ' ';
-            tfp_sprintf(buff + 10, "%4d", lrintf(nav_pids->pos[Y].output_constrained * 100));
+            tfp_sprintf(buff + 10, "%4d", (int)lrintf(nav_pids->pos[Y].output_constrained * 100));
             buff[14] = ' ';
-            tfp_sprintf(buff + 15, "%4d", lrintf(nav_pids->pos[Z].output_constrained * 100));
+            tfp_sprintf(buff + 15, "%4d", (int)lrintf(nav_pids->pos[Z].output_constrained * 100));
             buff[19] = '\0';
             break;
         }
@@ -2233,7 +2267,7 @@ static bool osdDrawSingleElement(uint8_t item)
                 }
             }
             if (value > 0 && value <= 999) {
-                tfp_sprintf(buff, "%3d", value);
+                tfp_sprintf(buff, "%3d", (int)value);
             } else {
                 buff[0] = buff[1] = buff[2] = '-';
             }
@@ -2274,22 +2308,67 @@ static bool osdDrawSingleElement(uint8_t item)
             break;
         }
 
-    case OSD_DEBUG:
+    case OSD_GFORCE:
         {
-            // Longest representable string is -32768, hence 6 characters
-            tfp_sprintf(buff, "[0]=%6d [1]=%6d", debug[0], debug[1]);
-            displayWrite(osdDisplayPort, elemPosX, elemPosY, buff);
-            elemPosY++;
-            tfp_sprintf(buff, "[2]=%6d [3]=%6d", debug[2], debug[3]);
+            osdFormatCentiNumber(buff, GForce, 0, 2, 0, 3);
+            if (GForce > osdConfig()->gforce_alarm * 100) {
+                TEXT_ATTRIBUTES_ADD_BLINK(elemAttr);
+            }
             break;
         }
 
-    case OSD_TEMPERATURE:
+    case OSD_GFORCE_X:
+    case OSD_GFORCE_Y:
+    case OSD_GFORCE_Z:
         {
-            int16_t temperature = getCurrentTemperature();
-            osdFormatTemperatureSymbol(buff, temperature);
+            float GForceValue = GForceAxis[item - OSD_GFORCE_X];
+            osdFormatCentiNumber(buff, GForceValue, 0, 2, 0, 4);
+            if ((GForceValue < osdConfig()->gforce_axis_alarm_min * 100) || (GForceValue > osdConfig()->gforce_axis_alarm_max * 100)) {
+                TEXT_ATTRIBUTES_ADD_BLINK(elemAttr);
+            }
             break;
         }
+
+    case OSD_DEBUG:
+        {
+            // Longest representable string is -32768, hence 6 characters
+            tfp_sprintf(buff, "[0]=%6d [1]=%6d", (int)debug[0], (int)debug[1]);
+            displayWrite(osdDisplayPort, elemPosX, elemPosY, buff);
+            elemPosY++;
+            tfp_sprintf(buff, "[2]=%6d [3]=%6d", (int)debug[2], (int)debug[3]);
+            break;
+        }
+
+    case OSD_IMU_TEMPERATURE:
+        {
+            int16_t temperature;
+            const bool valid = getIMUTemperature(&temperature);
+            osdDisplayTemperature(elemPosX, elemPosY, SYM_IMU_TEMP, NULL, valid, temperature, osdConfig()->imu_temp_alarm_min, osdConfig()->imu_temp_alarm_max);
+            return true;
+        }
+
+    case OSD_BARO_TEMPERATURE:
+        {
+            int16_t temperature;
+            const bool valid = getBaroTemperature(&temperature);
+            osdDisplayTemperature(elemPosX, elemPosY, SYM_BARO_TEMP, NULL, valid, temperature, osdConfig()->imu_temp_alarm_min, osdConfig()->imu_temp_alarm_max);
+            return true;
+        }
+
+#ifdef USE_TEMPERATURE_SENSOR
+    case OSD_TEMP_SENSOR_0_TEMPERATURE:
+    case OSD_TEMP_SENSOR_1_TEMPERATURE:
+    case OSD_TEMP_SENSOR_2_TEMPERATURE:
+    case OSD_TEMP_SENSOR_3_TEMPERATURE:
+    case OSD_TEMP_SENSOR_4_TEMPERATURE:
+    case OSD_TEMP_SENSOR_5_TEMPERATURE:
+    case OSD_TEMP_SENSOR_6_TEMPERATURE:
+    case OSD_TEMP_SENSOR_7_TEMPERATURE:
+        {
+            osdDisplayTemperatureSensor(elemPosX, elemPosY, item - OSD_TEMP_SENSOR_0_TEMPERATURE);
+            return true;
+        }
+#endif /* ifdef USE_TEMPERATURE_SENSOR */
 
     case OSD_WIND_SPEED_HORIZONTAL:
 #ifdef USE_WIND_ESTIMATOR
@@ -2354,6 +2433,59 @@ static bool osdDrawSingleElement(uint8_t item)
             break;
         }
 
+    case OSD_MAP_SCALE:
+        {
+            float scaleToUnit;
+            int scaleUnitDivisor;
+            char symUnscaled;
+            char symScaled;
+            int maxDecimals;
+
+            switch (osdConfig()->units) {
+            case OSD_UNIT_IMPERIAL:
+                scaleToUnit = 100 / 1609.3440f; // scale to 0.01mi for osdFormatCentiNumber()
+                scaleUnitDivisor = 0;
+                symUnscaled = SYM_MI;
+                symScaled = SYM_MI;
+                maxDecimals = 2;
+                break;
+            case OSD_UNIT_UK:
+                FALLTHROUGH;
+            case OSD_UNIT_METRIC:
+                scaleToUnit = 100; // scale to cm for osdFormatCentiNumber()
+                scaleUnitDivisor = 1000; // Convert to km when scale gets bigger than 999m
+                symUnscaled = SYM_M;
+                symScaled = SYM_KM;
+                maxDecimals = 0;
+                break;
+            }
+            buff[0] = SYM_SCALE;
+            if (osdMapData.scale > 0) {
+                bool scaled = osdFormatCentiNumber(&buff[1], osdMapData.scale * scaleToUnit, scaleUnitDivisor, maxDecimals, 2, 3);
+                buff[4] = scaled ? symScaled : symUnscaled;
+                // Make sure this is cleared if the map stops being drawn
+                osdMapData.scale = 0;
+            } else {
+                memset(&buff[1], '-', 4);
+            }
+            buff[5] = '\0';
+            break;
+        }
+    case OSD_MAP_REFERENCE:
+        {
+            char referenceSymbol;
+            if (osdMapData.referenceSymbol) {
+                referenceSymbol = osdMapData.referenceSymbol;
+                // Make sure this is cleared if the map stops being drawn
+                osdMapData.referenceSymbol = 0;
+            } else {
+                referenceSymbol = '-';
+            }
+            displayWriteChar(osdDisplayPort, elemPosX, elemPosY, SYM_DIRECTION);
+            displayWriteChar(osdDisplayPort, elemPosX, elemPosY + 1, referenceSymbol);
+            return true;
+        }
+
     default:
         return false;
     }
@@ -2368,6 +2500,11 @@ static uint8_t osdIncElementIndex(uint8_t elementIndex)
 
     if (elementIndex == OSD_ARTIFICIAL_HORIZON)
         ++elementIndex;
+
+#ifndef USE_TEMPERATURE_SENSOR
+    if (elementIndex == OSD_TEMP_SENSOR_0_TEMPERATURE)
+        elementIndex = OSD_ALTITUDE_MSL;
+#endif
 
     if (!sensors(SENSOR_ACC)) {
         if (elementIndex == OSD_CROSSHAIRS) {
@@ -2409,13 +2546,12 @@ static uint8_t osdIncElementIndex(uint8_t elementIndex)
         if (elementIndex == OSD_TRIP_DIST) {
             elementIndex = OSD_ATTITUDE_PITCH;
         }
-        if (elementIndex == OSD_MAP_NORTH) {
+        if (elementIndex == OSD_WIND_SPEED_HORIZONTAL) {
             elementIndex = OSD_SAG_COMPENSATED_MAIN_BATT_VOLTAGE;
         }
         if (elementIndex == OSD_3D_SPEED) {
             elementIndex++;
         }
-
     }
 
     if (elementIndex == OSD_ITEM_COUNT) {
@@ -2532,11 +2668,26 @@ void pgResetFn_osdConfig(osdConfig_t *osdConfig)
     osdConfig->item_pos[0][OSD_MC_POS_XYZ_P_OUTPUTS] = OSD_POS(2, 12);
 
     osdConfig->item_pos[0][OSD_POWER] = OSD_POS(15, 1);
-    osdConfig->item_pos[0][OSD_TEMPERATURE] = OSD_POS(23, 2);
+
+    osdConfig->item_pos[0][OSD_IMU_TEMPERATURE] = OSD_POS(19, 2);
+    osdConfig->item_pos[0][OSD_BARO_TEMPERATURE] = OSD_POS(19, 3);
+    osdConfig->item_pos[0][OSD_TEMP_SENSOR_0_TEMPERATURE] = OSD_POS(19, 4);
+    osdConfig->item_pos[0][OSD_TEMP_SENSOR_1_TEMPERATURE] = OSD_POS(19, 5);
+    osdConfig->item_pos[0][OSD_TEMP_SENSOR_2_TEMPERATURE] = OSD_POS(19, 6);
+    osdConfig->item_pos[0][OSD_TEMP_SENSOR_3_TEMPERATURE] = OSD_POS(19, 7);
+    osdConfig->item_pos[0][OSD_TEMP_SENSOR_4_TEMPERATURE] = OSD_POS(19, 8);
+    osdConfig->item_pos[0][OSD_TEMP_SENSOR_5_TEMPERATURE] = OSD_POS(19, 9);
+    osdConfig->item_pos[0][OSD_TEMP_SENSOR_6_TEMPERATURE] = OSD_POS(19, 10);
+    osdConfig->item_pos[0][OSD_TEMP_SENSOR_7_TEMPERATURE] = OSD_POS(19, 11);
 
     osdConfig->item_pos[0][OSD_AIR_SPEED] = OSD_POS(3, 5);
     osdConfig->item_pos[0][OSD_WIND_SPEED_HORIZONTAL] = OSD_POS(3, 6);
     osdConfig->item_pos[0][OSD_WIND_SPEED_VERTICAL] = OSD_POS(3, 7);
+
+    osdConfig->item_pos[0][OSD_GFORCE] = OSD_POS(12, 4);
+    osdConfig->item_pos[0][OSD_GFORCE_X] = OSD_POS(12, 5);
+    osdConfig->item_pos[0][OSD_GFORCE_Y] = OSD_POS(12, 6);
+    osdConfig->item_pos[0][OSD_GFORCE_Z] = OSD_POS(12, 7);
 
     // Under OSD_FLYMODE. TODO: Might not be visible on NTSC?
     osdConfig->item_pos[0][OSD_MESSAGES] = OSD_POS(1, 13) | OSD_VISIBLE_FLAG;
@@ -2552,6 +2703,19 @@ void pgResetFn_osdConfig(osdConfig_t *osdConfig)
     osdConfig->alt_alarm = 100;
     osdConfig->dist_alarm = 1000;
     osdConfig->neg_alt_alarm = 5;
+    osdConfig->imu_temp_alarm_min = -200;
+    osdConfig->imu_temp_alarm_max = 600;
+    osdConfig->gforce_alarm = 5;
+    osdConfig->gforce_axis_alarm_min = -5;
+    osdConfig->gforce_axis_alarm_max = 5;
+#ifdef USE_BARO
+    osdConfig->baro_temp_alarm_min = -200;
+    osdConfig->baro_temp_alarm_max = 600;
+#endif
+
+#ifdef USE_TEMPERATURE_SENSOR
+    osdConfig->temp_label_align = OSD_ALIGN_LEFT;
+#endif
 
     osdConfig->video_system = VIDEO_SYSTEM_AUTO;
 
@@ -2633,10 +2797,10 @@ void osdInit(displayPort_t *osdDisplayPortToUse)
     if (statsConfig()->stats_enabled) {
         displayWrite(osdDisplayPort, STATS_LABEL_X_POS, ++y, "ODOMETER:");
         if (osdConfig()->units == OSD_UNIT_IMPERIAL) {
-            tfp_sprintf(string_buffer, "%5d", statsConfig()->stats_total_dist / METERS_PER_MILE);
+            tfp_sprintf(string_buffer, "%5d", (int)(statsConfig()->stats_total_dist / METERS_PER_MILE));
             string_buffer[5] = SYM_MI;
         } else {
-            tfp_sprintf(string_buffer, "%5d", statsConfig()->stats_total_dist / METERS_PER_KILOMETER);
+            tfp_sprintf(string_buffer, "%5d", (int)(statsConfig()->stats_total_dist / METERS_PER_KILOMETER));
             string_buffer[5] = SYM_KM;
         }
         string_buffer[6] = '\0';
@@ -2644,7 +2808,7 @@ void osdInit(displayPort_t *osdDisplayPortToUse)
 
         displayWrite(osdDisplayPort, STATS_LABEL_X_POS, ++y, "TOTAL TIME:");
         uint32_t tot_mins = statsConfig()->stats_total_time / 60;
-        tfp_sprintf(string_buffer, "%2d:%02dHM", tot_mins / 60, tot_mins % 60);
+        tfp_sprintf(string_buffer, "%2d:%02dHM", (int)(tot_mins / 60), (int)(tot_mins % 60));
         displayWrite(osdDisplayPort, STATS_VALUE_X_POS-5, y,  string_buffer);
 
 #ifdef USE_ADC
@@ -2769,7 +2933,7 @@ static void osdShowStats(void)
 
         if (osdConfig()->stats_energy_unit == OSD_STATS_ENERGY_UNIT_MAH) {
             displayWrite(osdDisplayPort, statNameX, top, "USED MAH         :");
-            tfp_sprintf(buff, "%d%c", getMAhDrawn(), SYM_MAH);
+            tfp_sprintf(buff, "%d%c", (int)getMAhDrawn(), SYM_MAH);
         } else {
             displayWrite(osdDisplayPort, statNameX, top, "USED WH          :");
             osdFormatCentiNumber(buff, getMWhDrawn() / 10, 0, 2, 0, 3);
@@ -2781,7 +2945,7 @@ static void osdShowStats(void)
         if (totalDistance > 0) {
             displayWrite(osdDisplayPort, statNameX, top, "AVG EFFICIENCY   :");
             if (osdConfig()->stats_energy_unit == OSD_STATS_ENERGY_UNIT_MAH)
-                tfp_sprintf(buff, "%d%c%c", getMAhDrawn() * 100000 / totalDistance,
+                tfp_sprintf(buff, "%d%c%c", (int)(getMAhDrawn() * 100000 / totalDistance),
                     SYM_MAH_KM_0, SYM_MAH_KM_1);
             else {
                 osdFormatCentiNumber(buff, getMWhDrawn() * 10000 / totalDistance, 0, 2, 0, 3);
@@ -2801,6 +2965,19 @@ static void osdShowStats(void)
     flyMinutes %= 60;
     tfp_sprintf(buff, "%02u:%02u:%02u", flyHours, flyMinutes, flySeconds);
     displayWrite(osdDisplayPort, statValuesX, top++, buff);
+
+    const float max_gforce = accGetMeasuredMaxG();
+    displayWrite(osdDisplayPort, statNameX, top, "MAX G-FORCE      :");
+    osdFormatCentiNumber(buff, max_gforce * 100, 0, 2, 0, 3);
+    displayWrite(osdDisplayPort, statValuesX, top++, buff);
+
+    const acc_extremes_t *acc_extremes = accGetMeasuredExtremes();
+    displayWrite(osdDisplayPort, statNameX, top, "MIN/MAX Z G-FORCE:");
+    osdFormatCentiNumber(buff, acc_extremes[Z].min * 100, 0, 2, 0, 4);
+    strcat(buff,"/");
+    displayWrite(osdDisplayPort, statValuesX, top, buff);
+    osdFormatCentiNumber(buff, acc_extremes[Z].max * 100, 0, 2, 0, 3);
+    displayWrite(osdDisplayPort, statValuesX + 5, top++, buff);
 
     displayWrite(osdDisplayPort, statNameX, top, "DISARMED BY      :");
     displayWrite(osdDisplayPort, statValuesX, top++, disarmReasonStr[getDisarmReason()]);
@@ -2848,8 +3025,33 @@ static void osdShowArmed(void)
     }
 }
 
+static void osdFilterData(timeUs_t currentTimeUs) {
+    static timeUs_t lastRefresh = 0;
+    float refresh_dT = cmpTimeUs(currentTimeUs, lastRefresh) * 1e-6;
+
+    GForce = sqrtf(vectorNormSquared(&imuMeasuredAccelBF)) / GRAVITY_MSS;
+    for (uint8_t axis = 0; axis < XYZ_AXIS_COUNT; ++axis) GForceAxis[axis] = imuMeasuredAccelBF.v[axis] / GRAVITY_MSS;
+
+    if (lastRefresh) {
+        GForce = pt1FilterApply3(&GForceFilter, GForce, refresh_dT);
+        for (uint8_t axis = 0; axis < XYZ_AXIS_COUNT; ++axis) pt1FilterApply3(GForceFilterAxis + axis, GForceAxis[axis], refresh_dT);
+    } else {
+        pt1FilterInitRC(&GForceFilter, GFORCE_FILTER_TC, 0);
+        pt1FilterReset(&GForceFilter, GForce);
+
+        for (uint8_t axis = 0; axis < XYZ_AXIS_COUNT; ++axis) {
+            pt1FilterInitRC(GForceFilterAxis + axis, GFORCE_FILTER_TC, 0);
+            pt1FilterReset(GForceFilterAxis + axis, GForceAxis[axis]);
+        }
+    }
+
+    lastRefresh = currentTimeUs;
+}
+
 static void osdRefresh(timeUs_t currentTimeUs)
 {
+    osdFilterData(currentTimeUs);
+
 #ifdef USE_CMS
     if (IS_RC_MODE_ACTIVE(BOXOSD) && (!cmsInMenu) && !(osdConfig()->osd_failsafe_switch_layout && FLIGHT_MODE(FAILSAFE_MODE))) {
 #else
@@ -3010,6 +3212,11 @@ bool osdItemIsFixed(osd_items_e item)
     return item == OSD_CROSSHAIRS ||
         item == OSD_ARTIFICIAL_HORIZON ||
         item == OSD_HORIZON_SIDEBARS;
+}
+
+displayPort_t *osdGetDisplayPort(void)
+{
+    return osdDisplayPort;
 }
 
 #endif // OSD
