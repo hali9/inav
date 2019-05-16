@@ -95,9 +95,6 @@ typedef enum {
 
 extern const char rcChannelLetters[];
 
-extern int16_t rcRaw[MAX_SUPPORTED_RC_CHANNEL_COUNT];        // interval [1000;2000]
-extern int16_t rcData[MAX_SUPPORTED_RC_CHANNEL_COUNT];       // interval [1000;2000]
-
 #define MAX_MAPPABLE_RX_INPUTS 4
 
 #define RSSI_VISIBLE_VALUE_MIN 0
@@ -109,6 +106,8 @@ typedef struct rxChannelRangeConfig_s {
     uint16_t max;
 } rxChannelRangeConfig_t;
 PG_DECLARE_ARRAY(rxChannelRangeConfig_t, NON_AUX_CHANNEL_COUNT, rxChannelRangeConfigs);
+
+PG_DECLARE_ARRAY(int16_t, MAX_AUX_CHANNEL_COUNT, rxChannelAuxConfigs);
 
 typedef struct rxConfig_s {
     uint8_t receiverType;                   // RC receiver type (rxReceiverType_e enum)
@@ -168,7 +167,9 @@ void rxUpdateRSSISource(void);
 bool rxUpdateCheck(timeUs_t currentTimeUs, timeDelta_t currentDeltaTime);
 bool rxIsReceivingSignal(void);
 bool rxAreFlightChannelsValid(void);
+bool rxAreAuxChannelsValid(void);
 bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs);
+void applyAuxChannelsOnFailsafe();
 
 void parseRcChannels(const char *input);
 
@@ -187,3 +188,13 @@ void suspendRxSignal(void);
 void resumeRxSignal(void);
 
 uint16_t rxGetRefreshRate(void);
+
+// Processed RC channel value. These values might include
+// filtering and some extra processing like value holding
+// during failsafe. Most callers should use this instead
+// of rxGetRawChannelValue()
+int16_t rxGetChannelValue(unsigned channelNumber);
+
+// Raw RC channel data as received by the RX. Should only
+// be used by very low level subsystems, like blackbox.
+int16_t rxGetRawChannelValue(unsigned channelNumber);
