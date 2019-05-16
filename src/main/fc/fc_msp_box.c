@@ -151,7 +151,15 @@ void serializeBoxReply(sbuf_t *dst)
         if (!box) {
             continue;
         }
-        sbufWriteU8(dst, box->permanentId);
+		uint8_t boxPermanentId = box->permanentId;
+		if (ARMING_FLAG(ARMED)) {
+            switch (boxPermanentId) {
+                case 28: boxPermanentId = 20; break; //wp
+                case 27: boxPermanentId = 21; break; //land
+                case 30: boxPermanentId = 28; break; //air
+            }
+        }
+        sbufWriteU8(dst, boxPermanentId);
     }
 }
 
@@ -363,11 +371,13 @@ uint16_t packSensorStatus(void)
     uint16_t sensorStatus =
             IS_ENABLED(sensors(SENSOR_ACC))     << 0 |
             IS_ENABLED(sensors(SENSOR_BARO))    << 1 |
-            IS_ENABLED(sensors(SENSOR_MAG))     << 2 |
+            //IS_ENABLED(sensors(SENSOR_MAG))     << 2 |
+            IS_ENABLED(sensors(SENSOR_GPS))     << 2 |
             IS_ENABLED(sensors(SENSOR_GPS))     << 3 |
             IS_ENABLED(sensors(SENSOR_RANGEFINDER))   << 4 |
             IS_ENABLED(sensors(SENSOR_OPFLOW))  << 5 |
-            IS_ENABLED(sensors(SENSOR_PITOT))   << 6;
+            IS_ENABLED(sensors(SENSOR_PITOT))   << 6 |
+            IS_ENABLED(sensors(SENSOR_TEMP))   << 7;
 
     // Hardware failure indication bit
     if (!isHardwareHealthy()) {
