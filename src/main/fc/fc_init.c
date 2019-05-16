@@ -22,6 +22,7 @@
 #include "platform.h"
 
 #include "blackbox/blackbox.h"
+#include "blackbox/blackbox_io.h"
 
 #include "build/assert.h"
 #include "build/atomic.h"
@@ -316,16 +317,7 @@ void init(void)
     pwm_params.servoCenterPulse = servoConfig()->servoCenterPulse;
     pwm_params.servoPwmRate = servoConfig()->servoPwmRate;
 
-    pwm_params.pwmProtocolType = motorConfig()->motorPwmProtocol;
-#ifndef BRUSHED_MOTORS
-    pwm_params.useFastPwm = (motorConfig()->motorPwmProtocol == PWM_TYPE_ONESHOT125) ||
-                            (motorConfig()->motorPwmProtocol == PWM_TYPE_ONESHOT42) ||
-                            (motorConfig()->motorPwmProtocol == PWM_TYPE_MULTISHOT);
-#endif
-    pwm_params.motorPwmRate = motorConfig()->motorPwmRate;
-
     if (motorConfig()->motorPwmProtocol == PWM_TYPE_BRUSHED) {
-        pwm_params.useFastPwm = false;
         featureClear(FEATURE_3D);
     }
 
@@ -349,9 +341,6 @@ void init(void)
     pwmInit(&pwm_params);
 
     mixerPrepare();
-
-    if (!pwm_params.useFastPwm)
-        motorControlEnable = true;
 
     addBootlogEvent2(BOOT_EVENT_PWM_INIT_DONE, BOOT_EVENT_FLAGS_NONE);
     systemState |= SYSTEM_STATE_MOTORS_READY;
@@ -380,27 +369,6 @@ void init(void)
 
     // Initialize buses
     busInit();
-
-#ifdef USE_SPI
-#ifdef USE_SPI_DEVICE_1
-    spiInit(SPIDEV_1);
-#endif
-#ifdef USE_SPI_DEVICE_2
-    spiInit(SPIDEV_2);
-#endif
-#ifdef USE_SPI_DEVICE_3
-#ifdef ALIENFLIGHTF3
-    if (hardwareRevision == AFF3_REV_2) {
-        spiInit(SPIDEV_3);
-    }
-#else
-    spiInit(SPIDEV_3);
-#endif
-#endif
-#ifdef USE_SPI_DEVICE_4
-    spiInit(SPIDEV_4);
-#endif
-#endif
 
 #ifdef USE_HARDWARE_REVISION_DETECTION
     updateHardwareRevision();
@@ -618,21 +586,30 @@ void init(void)
     }
 #endif
 
+#ifdef USE_BLACKBOX
+    // SDCARD and FLASHFS are used only for blackbox
+    // Make sure we only init what's necessary for blackbox
+    switch (blackboxConfig()->device) {
 #ifdef USE_FLASHFS
+        case BLACKBOX_DEVICE_FLASH:
 #ifdef USE_FLASH_M25P16
-    m25p16_init(0);
+            m25p16_init(0);
 #endif
-
-    flashfsInit();
+            flashfsInit();
+            break;
 #endif
 
 #ifdef USE_SDCARD
-    sdcardInsertionDetectInit();
-    sdcard_init();
-    afatfs_init();
+        case BLACKBOX_DEVICE_SDCARD:
+            sdcardInsertionDetectInit();
+            sdcard_init();
+            afatfs_init();
+            break;
 #endif
+        default:
+            break;
+    }
 
-#ifdef USE_BLACKBOX
     blackboxInit();
 #endif
 

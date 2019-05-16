@@ -50,6 +50,8 @@
 #include "navigation/navigation.h"
 #include "navigation/navigation_private.h"
 
+#include "rx/rx.h"
+
 #include "sensors/sensors.h"
 #include "sensors/acceleration.h"
 #include "sensors/boardalignment.h"
@@ -68,7 +70,7 @@
  * Compatibility for home position
  *-----------------------------------------------------------*/
 gpsLocation_t GPS_home;
-uint16_t      GPS_distanceToHome;        // distance to home point in meters
+uint32_t      GPS_distanceToHome;        // distance to home point in meters
 int16_t       GPS_directionToHome;       // direction to home point in degrees
 
 #if defined(USE_NAV)
@@ -83,7 +85,7 @@ PG_RESET_TEMPLATE(navConfig_t, navConfig,
 
         .flags = {
             .use_thr_mid_for_althold = 0,
-            .extra_arming_safety = 1,
+            .extra_arming_safety = NAV_EXTRA_ARMING_SAFETY_ON,
             .user_control_mode = NAV_GPS_ATTI,
             .rth_alt_control_mode = NAV_RTH_AT_LEAST_ALT,
             .rth_climb_first = 1,                   // Climb first, turn after reaching safe altitude
@@ -477,6 +479,7 @@ static const navigationFSMStateDescriptor_t navFSM[NAV_STATE_COUNT] = {
             [NAV_FSM_EVENT_SWITCH_TO_IDLE]              = NAV_STATE_IDLE,
             [NAV_FSM_EVENT_SWITCH_TO_ALTHOLD]           = NAV_STATE_ALTHOLD_INITIALIZE,
             [NAV_FSM_EVENT_SWITCH_TO_POSHOLD_3D]        = NAV_STATE_POSHOLD_3D_INITIALIZE,
+            [NAV_FSM_EVENT_SWITCH_TO_EMERGENCY_LANDING] = NAV_STATE_EMERGENCY_LANDING_INITIALIZE,
             [NAV_FSM_EVENT_SWITCH_TO_CRUISE_2D]         = NAV_STATE_CRUISE_2D_INITIALIZE,
             [NAV_FSM_EVENT_SWITCH_TO_CRUISE_3D]         = NAV_STATE_CRUISE_3D_INITIALIZE,
         }
@@ -1160,6 +1163,15 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_CLIMB_TO_SAFE_ALT(n
                 initializeRTHSanityChecker(&navGetCurrentActualPositionAndVelocity()->pos);
             }
 
+            posControl.rthInitialHomeDistance = posControl.homeDistance;
+
+            if (navConfig()->general.flags.rth_tail_first && !STATE(FIXED_WING)) {
+                setDesiredPosition(&posControl.homeWaypointAbove.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING_TAIL_FIRST);
+            }
+            else {
+                setDesiredPosition(&posControl.homeWaypointAbove.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING);
+            }
+
             return NAV_FSM_EVENT_SUCCESS;   // NAV_STATE_RTH_HEAD_HOME
         }
         else {
@@ -1185,8 +1197,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_CLIMB_TO_SAFE_ALT(n
 
                 if (navConfig()->general.flags.rth_tail_first) {
                     setDesiredPosition(&pos, 0, NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING_TAIL_FIRST);
-                }
-                else {
+                } else {
                     setDesiredPosition(&pos, 0, NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING);
                 }
             }
@@ -1220,13 +1231,17 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_HEAD_HOME(navigatio
             return NAV_FSM_EVENT_SWITCH_TO_EMERGENCY_LANDING;
         }
         else {
-            // Update XYZ-position target
-            if (navConfig()->general.flags.rth_tail_first && !STATE(FIXED_WING)) {
-                setDesiredPosition(&posControl.homeWaypointAbove.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING_TAIL_FIRST);
+            if (navConfig()->general.flags.rth_alt_control_mode == NAV_RTH_AT_LEAST_ALT_LINEAR_DESCENT) {
+                fpVector3_t pos;
+                uint16_t loiterDistanceFromHome = STATE(FIXED_WING) ? navConfig()->fw.loiter_radius : 0;
+                uint32_t distanceToLoiterToTravelFromRTHStart = posControl.rthInitialHomeDistance - loiterDistanceFromHome;
+                uint32_t distanceToLoiterTraveled = constrain((int32_t)posControl.rthInitialHomeDistance - posControl.homeDistance, 0, distanceToLoiterToTravelFromRTHStart);
+                float RTHStartAltitude = posControl.homeWaypointAbove.pos.z;
+                float RTHFinalAltitude = posControl.homePosition.pos.z + navConfig()->general.rth_altitude;
+                pos.z = RTHStartAltitude - scaleRange(distanceToLoiterTraveled, 0, distanceToLoiterToTravelFromRTHStart, 0, RTHStartAltitude - RTHFinalAltitude);
+                setDesiredPosition(&pos, 0, NAV_POS_UPDATE_Z);
             }
-            else {
-                setDesiredPosition(&posControl.homeWaypointAbove.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING);
-            }
+
             return NAV_FSM_EVENT_NONE;
         }
     }
@@ -1816,14 +1831,6 @@ void navPidInit(pidController_t *pid, float _kP, float _kI, float _kD, float _kF
     }
     pid->dTermLpfHz = _dTermLpfHz;
     navPidReset(pid);
-}
-
-/*-----------------------------------------------------------
- * Float point P-controller implementation
- *-----------------------------------------------------------*/
-void navPInit(pController_t *p, float _kP)
-{
-    p->param.kP = _kP;
 }
 
 /*-----------------------------------------------------------
@@ -2577,7 +2584,12 @@ void setWaypoint(uint8_t wpNumber, const navWaypoint_t * wpData)
     }
     // WP #1 - #15 - common waypoints - pre-programmed mission
     else if ((wpNumber >= 1) && (wpNumber <= NAV_MAX_WAYPOINTS) && !ARMING_FLAG(ARMED)) {
-        if (wpData->action == NAV_WP_ACTION_WAYPOINT || wpData->action == NAV_WP_ACTION_RTH) {
+        if (wpData->action == NAV_WP_ACTION_WAYPOINT
+         || wpData->action == NAV_WP_ACTION_RTH
+#ifdef NAV_NON_VOLATILE_WAYPOINT_CLI
+         || wpData->action == NAV_WP_ACTION_RELATIVE
+#endif
+           ) {
             // Only allow upload next waypoint (continue upload mission) or first waypoint (new mission)
             if (wpNumber == (posControl.waypointCount + 1) || wpNumber == 1) {
                 posControl.waypointList[wpNumber - 1] = *wpData;
@@ -2607,14 +2619,66 @@ int getWaypointCount(void)
     return posControl.waypointCount;
 }
 
+void mapWaypointToLocalPosition(fpVector3_t * localPos, const navWaypoint_t * waypoint)
+{
+    gpsLocation_t wpLLH;
+
+    wpLLH.lat = waypoint->lat;
+    wpLLH.lon = waypoint->lon;
+    wpLLH.alt = waypoint->alt;
+
+    geoConvertGeodeticToLocal(localPos, &posControl.gpsOrigin, &wpLLH, GEO_ALT_RELATIVE);
+}
+
 #ifdef NAV_NON_VOLATILE_WAYPOINT_STORAGE
-bool loadNonVolatileWaypointList(void)
+
+#ifdef NAV_NON_VOLATILE_WAYPOINT_CLI
+bool calculateFromRelativeWaypoint(bool checkRelativeCalculate, int wpNumer, navWaypoint_t * waypoint) {
+    if (waypoint->action == NAV_WP_ACTION_RELATIVE) { //waypoint->lat is distance, waypoint->lon is course
+        if (posControl.flags.estPosStatus < EST_USABLE || !posControl.gpsOrigin.valid)
+            return !checkRelativeCalculate;
+        navWaypoint_t previous;
+        if (wpNumer == 0) {
+            previous.lat = gpsSol.llh.lat; //current position
+            previous.lon = gpsSol.llh.lon;
+        } else {
+            getWaypoint(wpNumer, &previous);
+            if (previous.action == NAV_WP_ACTION_RELATIVE) 
+                return false;
+        }
+        fpVector3_t localPos;
+        mapWaypointToLocalPosition(&localPos, &previous);
+        localPos.x += waypoint->lat * 100 * cos_approx(DEGREES_TO_RADIANS(waypoint->lon));
+        localPos.y += waypoint->lat * 100 * sin_approx(DEGREES_TO_RADIANS(waypoint->lon));
+        gpsLocation_t wpLLH;
+        geoConvertLocalToGeodetic(&wpLLH, &posControl.gpsOrigin, &localPos);
+        waypoint->lat = wpLLH.lat;
+        waypoint->lon = wpLLH.lon;
+        waypoint->action = NAV_WP_ACTION_WAYPOINT;
+    }
+    return true;
+}
+#endif
+
+bool loadNonVolatileWaypointList(bool checkRelativeCalculate)
 {
     if (ARMING_FLAG(ARMED))
         return false;
 
     resetWaypointList();
 
+#ifdef NAV_NON_VOLATILE_WAYPOINT_CLI
+    bool calcOk = true;
+    for (int i = 0; i < NAV_MAX_WAYPOINTS; i++) {
+        navWaypoint_t navWaypoint = *nonVolatileWaypointList(i);
+        if (!calculateFromRelativeWaypoint(checkRelativeCalculate, i, &navWaypoint))
+            calcOk = false;
+        setWaypoint(i + 1, &navWaypoint);
+        if (nonVolatileWaypointList(i)->flag == NAV_WP_FLAG_LAST)
+            break;
+    }
+    if (!calcOk) posControl.waypointListValid = false;
+#else
     for (int i = 0; i < NAV_MAX_WAYPOINTS; i++) {
         // Load waypoint
         setWaypoint(i + 1, nonVolatileWaypointList(i));
@@ -2623,6 +2687,7 @@ bool loadNonVolatileWaypointList(void)
         if (nonVolatileWaypointList(i)->flag == NAV_WP_FLAG_LAST)
             break;
     }
+#endif
 
     // Mission sanity check failed - reset the list
     if (!posControl.waypointListValid) {
@@ -2646,17 +2711,6 @@ bool saveNonVolatileWaypointList(void)
     return true;
 }
 #endif
-
-static void mapWaypointToLocalPosition(fpVector3_t * localPos, const navWaypoint_t * waypoint)
-{
-    gpsLocation_t wpLLH;
-
-    wpLLH.lat = waypoint->lat;
-    wpLLH.lon = waypoint->lon;
-    wpLLH.alt = waypoint->alt;
-
-    geoConvertGeodeticToLocal(localPos, &posControl.gpsOrigin, &wpLLH, GEO_ALT_RELATIVE);
-}
 
 static void calculateAndSetActiveWaypointToLocalPosition(const fpVector3_t * pos)
 {
@@ -2779,6 +2833,7 @@ void applyWaypointNavigationAndAltitudeHold(void)
     if (posControl.flags.estAltStatus == EST_TRUSTED)       navFlags |= (1 << 0);
     if (posControl.flags.estAglStatus == EST_TRUSTED)       navFlags |= (1 << 1);
     if (posControl.flags.estPosStatus == EST_TRUSTED)       navFlags |= (1 << 2);
+    if (posControl.flags.isTerrainFollowEnabled)            navFlags |= (1 << 3);
 #if defined(NAV_GPS_GLITCH_DETECTION)
     if (isGPSGlitchDetected())                              navFlags |= (1 << 4);
 #endif
@@ -3013,23 +3068,34 @@ bool navigationTerrainFollowingEnabled(void)
     return posControl.flags.isTerrainFollowEnabled;
 }
 
-bool navigationBlockArming(void)
+navArmingBlocker_e navigationIsBlockingArming(bool *usedBypass)
 {
     const bool navBoxModesEnabled = IS_RC_MODE_ACTIVE(BOXNAVRTH) || IS_RC_MODE_ACTIVE(BOXNAVWP) || IS_RC_MODE_ACTIVE(BOXNAVPOSHOLD) || (STATE(FIXED_WING) && IS_RC_MODE_ACTIVE(BOXNAVALTHOLD)) || (STATE(FIXED_WING) && IS_RC_MODE_ACTIVE(BOXNAVCRUISE));
     const bool navLaunchComboModesEnabled = isNavLaunchEnabled() && (IS_RC_MODE_ACTIVE(BOXNAVRTH) || IS_RC_MODE_ACTIVE(BOXNAVWP) || IS_RC_MODE_ACTIVE(BOXNAVALTHOLD) || IS_RC_MODE_ACTIVE(BOXNAVCRUISE));
-    bool shouldBlockArming = false;
 
-    if (!navConfig()->general.flags.extra_arming_safety)
-        return false;
+    if (usedBypass) {
+        *usedBypass = false;
+    }
+
+    if (navConfig()->general.flags.extra_arming_safety == NAV_EXTRA_ARMING_SAFETY_OFF) {
+        return NAV_ARMING_BLOCKER_NONE;
+    }
 
     // Apply extra arming safety only if pilot has any of GPS modes configured
     if ((isUsingNavigationModes() || failsafeMayRequireNavigationMode()) && !((posControl.flags.estPosStatus >= EST_USABLE) && STATE(GPS_FIX_HOME))) {
-        shouldBlockArming = true;
+        if (navConfig()->general.flags.extra_arming_safety == NAV_EXTRA_ARMING_SAFETY_ALLOW_BYPASS &&
+            (STATE(NAV_EXTRA_ARMING_SAFETY_BYPASSED) || rxGetChannelValue(YAW) > 1750)) {
+            if (usedBypass) {
+                *usedBypass = true;
+            }
+            return NAV_ARMING_BLOCKER_NONE;
+        }
+        return NAV_ARMING_BLOCKER_MISSING_GPS_FIX;
     }
 
     // Don't allow arming if any of NAV modes is active
     if (!ARMING_FLAG(ARMED) && navBoxModesEnabled && !navLaunchComboModesEnabled) {
-        shouldBlockArming = true;
+        return NAV_ARMING_BLOCKER_NAV_IS_ALREADY_ACTIVE;
     }
 
     // Don't allow arming if first waypoint is farther than configured safe distance
@@ -3040,13 +3106,12 @@ bool navigationBlockArming(void)
         const bool navWpMissionStartTooFar = calculateDistanceToDestination(&startingWaypointPos) > navConfig()->general.waypoint_safe_distance;
 
         if (navWpMissionStartTooFar) {
-            shouldBlockArming = true;
+            return NAV_ARMING_BLOCKER_FIRST_WAYPOINT_TOO_FAR;
         }
     }
 
-    return shouldBlockArming;
+    return NAV_ARMING_BLOCKER_NONE;
 }
-
 
 bool navigationPositionEstimateIsHealthy(void)
 {
@@ -3122,7 +3187,14 @@ void navigationUsePIDs(void)
 
     // Initialize position hold P-controller
     for (int axis = 0; axis < 2; axis++) {
-        navPInit(&posControl.pids.pos[axis], (float)pidProfile()->bank_mc.pid[PID_POS_XY].P / 100.0f);
+        navPidInit(
+            &posControl.pids.pos[axis], 
+            (float)pidProfile()->bank_mc.pid[PID_POS_XY].P / 100.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            NAV_DTERM_CUT_HZ
+        );
 
         navPidInit(&posControl.pids.vel[axis], (float)pidProfile()->bank_mc.pid[PID_VEL_XY].P / 20.0f,
                                                (float)pidProfile()->bank_mc.pid[PID_VEL_XY].I / 100.0f,
@@ -3133,7 +3205,14 @@ void navigationUsePIDs(void)
     }
 
     // Initialize altitude hold PID-controllers (pos_z, vel_z, acc_z
-    navPInit(&posControl.pids.pos[Z], (float)pidProfile()->bank_mc.pid[PID_POS_Z].P / 100.0f);
+    navPidInit(
+        &posControl.pids.pos[Z], 
+        (float)pidProfile()->bank_mc.pid[PID_POS_Z].P / 100.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        NAV_DTERM_CUT_HZ
+    );
 
     navPidInit(&posControl.pids.vel[Z], (float)pidProfile()->bank_mc.pid[PID_VEL_Z].P / 66.7f,
                                         (float)pidProfile()->bank_mc.pid[PID_VEL_Z].I / 20.0f,

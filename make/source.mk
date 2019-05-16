@@ -45,6 +45,7 @@ COMMON_SRC = \
             drivers/rx_spi.c \
             drivers/rx_xn297.c \
             drivers/pitotmeter_adc.c \
+            drivers/pitotmeter_virtual.c \
             drivers/pwm_esc_detect.c \
             drivers/pwm_mapping.c \
             drivers/pwm_output.c \
@@ -93,6 +94,7 @@ COMMON_SRC = \
             io/beeper.c \
             io/lights.c \
             io/pwmdriver_i2c.c \
+            io/esc_serialshot.c \
             io/piniobox.c \
             io/serial.c \
             io/serial_4way.c \
@@ -146,6 +148,7 @@ COMMON_SRC = \
             cms/cms_menu_misc.c \
             cms/cms_menu_navigation.c \
             cms/cms_menu_osd.c \
+            cms/cms_menu_saveexit.c \
             cms/cms_menu_vtx_smartaudio.c \
             cms/cms_menu_vtx_tramp.c \
             cms/cms_menu_vtx_ffpv.c \
@@ -166,6 +169,7 @@ COMMON_SRC = \
             io/displayport_max7456.c \
             io/displayport_msp.c \
             io/displayport_oled.c \
+            io/displayport_hott.c \
             io/gps.c \
             io/gps_ublox.c \
             io/gps_nmea.c \

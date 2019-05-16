@@ -90,6 +90,7 @@
 #include "msp/msp_serial.h"
 
 #include "navigation/navigation.h"
+#include "navigation/navigation_private.h"
 
 #include "rx/rx.h"
 #include "rx/msp.h"
@@ -508,14 +509,26 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
 
     case MSP_RC:
         for (int i = 0; i < rxRuntimeConfig.channelCount; i++) {
-            sbufWriteU16(dst, rxGetRawChannelValue(i));
+            if (getConfigProfile()==0 || (getConfigProfile()==1 && (millis() / 1000) % 2)) {
+                sbufWriteU16(dst, rxGetRawChannelValue(i));
+            } else {
+                sbufWriteU16(dst, rxGetChannelValue(i));
+            }
         }
         break;
 
     case MSP_ATTITUDE:
         sbufWriteU16(dst, attitude.values.roll);
         sbufWriteU16(dst, attitude.values.pitch);
-        sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+		if (IS_RC_MODE_ACTIVE(BOXHOMERESET)) {
+          sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.homePosition.yaw));
+          //sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.homeWaypointAbove.yaw));
+          //int32_t     yaw;             // deg * 100		  
+        } else {
+          sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+	      //int16_t absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
+          //sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(posControl.actualState.yaw));
+        }
         break;
 
     case MSP_ALTITUDE:
@@ -542,7 +555,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
         break;
 
     case MSP2_INAV_OPTICAL_FLOW:
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
         sbufWriteU8(dst, opflow.rawQuality);
         sbufWriteU16(dst, RADIANS_TO_DEGREES(opflow.flowRate[X]));
         sbufWriteU16(dst, RADIANS_TO_DEGREES(opflow.flowRate[Y]));
@@ -578,7 +591,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
         break;
 
     case MSP_ARMING_CONFIG:
-        sbufWriteU8(dst, armingConfig()->auto_disarm_delay);
+        sbufWriteU8(dst, 0);
         sbufWriteU8(dst, armingConfig()->disarm_kill_switch);
         break;
 
@@ -1062,7 +1075,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
         sbufWriteU8(dst, gyroConfig()->gyro_align);
         sbufWriteU8(dst, accelerometerConfig()->acc_align);
         sbufWriteU8(dst, compassConfig()->mag_align);
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
         sbufWriteU8(dst, opticalFlowConfig()->opflow_align);
 #else
         sbufWriteU8(dst, 0);
@@ -1178,7 +1191,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
 #else
         sbufWriteU8(dst, 0);
 #endif
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
         sbufWriteU8(dst, opticalFlowConfig()->opflow_hardware);
 #else
         sbufWriteU8(dst, 0);
@@ -1250,6 +1263,12 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
     #else
         sbufWriteU16(dst, 0);
         sbufWriteU16(dst, 0);
+        sbufWriteU16(dst, 0);
+    #endif
+
+    #ifdef USE_OPFLOW
+        sbufWriteU16(dst, opticalFlowConfig()->opflow_scale * 256);
+    #else
         sbufWriteU16(dst, 0);
     #endif
         break;
@@ -1547,7 +1566,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 
     case MSP_SET_ARMING_CONFIG:
         if (dataSize >= 2) {
-            armingConfigMutable()->auto_disarm_delay = constrain(sbufReadU8(src), AUTO_DISARM_DELAY_MIN, AUTO_DISARM_DELAY_MAX);
+            sbufReadU8(src); //Swallow the first byte, used to be auto_disarm_delay
             armingConfigMutable()->disarm_kill_switch = !!sbufReadU8(src);
         } else
             return MSP_RESULT_ERROR;
@@ -1893,7 +1912,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 #ifdef USE_LOGIC_CONDITIONS
     case MSP2_INAV_SET_LOGIC_CONDITIONS:
         sbufReadU8Safe(&tmp_u8, src);
-        if ((dataSize == 13) && (tmp_u8 < MAX_LOGIC_CONDITIONS)) {
+        if ((dataSize == 14) && (tmp_u8 < MAX_LOGIC_CONDITIONS)) {
             logicConditionsMutable(tmp_u8)->enabled = sbufReadU8(src);
             logicConditionsMutable(tmp_u8)->operation = sbufReadU8(src);
             logicConditionsMutable(tmp_u8)->operandA.type = sbufReadU8(src);
@@ -1948,7 +1967,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 #else
             sbufReadU8(src);
 #endif
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
             opticalFlowConfigMutable()->opflow_align = sbufReadU8(src);
 #else
             sbufReadU8(src);
@@ -2080,7 +2099,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 #else
             sbufReadU8(src);        // rangefinder hardware
 #endif
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
             opticalFlowConfigMutable()->opflow_hardware = sbufReadU8(src);
 #else
             sbufReadU8(src);        // optical flow hardware
@@ -2164,6 +2183,11 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
             sbufReadU16(src);
             sbufReadU16(src);
 #endif
+#ifdef USE_OPFLOW
+            if (dataSize >= 20) {
+                opticalFlowConfigMutable()->opflow_scale = sbufReadU16(src) / 256.0f;
+            }
+#endif
         } else
             return MSP_RESULT_ERROR;
         break;
@@ -2204,6 +2228,15 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
         else
             return MSP_RESULT_ERROR;
         break;
+
+#ifdef USE_OPFLOW
+    case MSP2_INAV_OPFLOW_CALIBRATION:
+        if (!ARMING_FLAG(ARMED))
+            opflowStartCalibration();
+        else
+            return MSP_RESULT_ERROR;
+        break;
+#endif
 
     case MSP_EEPROM_WRITE:
         if (!ARMING_FLAG(ARMED)) {
@@ -2596,7 +2629,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 #ifdef NAV_NON_VOLATILE_WAYPOINT_STORAGE
     case MSP_WP_MISSION_LOAD:
         sbufReadU8Safe(NULL, src);    // Mission ID (reserved)
-        if ((dataSize != 1) || (!loadNonVolatileWaypointList()))
+        if ((dataSize != 1) || (!loadNonVolatileWaypointList(true)))
             return MSP_RESULT_ERROR;
         break;
 
