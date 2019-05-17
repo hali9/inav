@@ -169,7 +169,7 @@ bool rxIsReceivingSignal(void);
 bool rxAreFlightChannelsValid(void);
 bool rxAreAuxChannelsValid(void);
 bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs);
-void applyAuxChannelsOnFailsafe();
+void applyAuxChannelsOnFailsafe(void);
 
 void parseRcChannels(const char *input);
 
