@@ -90,6 +90,7 @@
 #include "msp/msp_serial.h"
 
 #include "navigation/navigation.h"
+#include "navigation/navigation_private.h"
 
 #include "rx/rx.h"
 #include "rx/msp.h"
@@ -508,14 +509,26 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
 
     case MSP_RC:
         for (int i = 0; i < rxRuntimeConfig.channelCount; i++) {
-            sbufWriteU16(dst, rxGetRawChannelValue(i));
+            if (getConfigProfile()==0 || (getConfigProfile()==1 && (millis() / 1000) % 2)) {
+                sbufWriteU16(dst, rxGetRawChannelValue(i));
+            } else {
+                sbufWriteU16(dst, rxGetChannelValue(i));
+            }
         }
         break;
 
     case MSP_ATTITUDE:
         sbufWriteU16(dst, attitude.values.roll);
         sbufWriteU16(dst, attitude.values.pitch);
-        sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+		if (IS_RC_MODE_ACTIVE(BOXHOMERESET)) {
+          sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.homePosition.yaw));
+          //sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.homeWaypointAbove.yaw));
+          //int32_t     yaw;             // deg * 100		  
+        } else {
+          sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+	      //int16_t absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
+          //sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(posControl.actualState.yaw));
+        }
         break;
 
     case MSP_ALTITUDE:
@@ -2616,7 +2629,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 #ifdef NAV_NON_VOLATILE_WAYPOINT_STORAGE
     case MSP_WP_MISSION_LOAD:
         sbufReadU8Safe(NULL, src);    // Mission ID (reserved)
-        if ((dataSize != 1) || (!loadNonVolatileWaypointList()))
+        if ((dataSize != 1) || (!loadNonVolatileWaypointList(true)))
             return MSP_RESULT_ERROR;
         break;
 

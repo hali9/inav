@@ -107,6 +107,8 @@ typedef struct rxChannelRangeConfig_s {
 } rxChannelRangeConfig_t;
 PG_DECLARE_ARRAY(rxChannelRangeConfig_t, NON_AUX_CHANNEL_COUNT, rxChannelRangeConfigs);
 
+PG_DECLARE_ARRAY(int16_t, MAX_AUX_CHANNEL_COUNT, rxChannelAuxConfigs);
+
 typedef struct rxConfig_s {
     uint8_t receiverType;                   // RC receiver type (rxReceiverType_e enum)
     uint8_t rcmap[MAX_MAPPABLE_RX_INPUTS];  // mapping of radio channels to internal RPYTA+ order
@@ -165,7 +167,9 @@ void rxUpdateRSSISource(void);
 bool rxUpdateCheck(timeUs_t currentTimeUs, timeDelta_t currentDeltaTime);
 bool rxIsReceivingSignal(void);
 bool rxAreFlightChannelsValid(void);
+bool rxAreAuxChannelsValid(void);
 bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs);
+void applyAuxChannelsOnFailsafe();
 
 void parseRcChannels(const char *input);
 

@@ -112,6 +112,8 @@ typedef struct pidProfile_s {
 
     int16_t max_angle_inclination[ANGLE_INDEX_COUNT];       // Max possible inclination (roll and pitch axis separately
 
+    int16_t land_direction;                 // predefined landing direction in deg, 0-not use, <0-can change by homeReset
+
     float dterm_setpoint_weight;
     uint16_t pidSumLimit;
 
@@ -120,6 +122,9 @@ typedef struct pidProfile_s {
     float       fixedWingReferenceAirspeed;     // Reference tuning airspeed for the airplane - the speed for which PID gains are tuned
     float       fixedWingCoordinatedYawGain;    // This is the gain of the yaw rate required to keep the yaw rate consistent with the turn rate for a coordinated turn.
     float       fixedWingItermLimitOnStickPosition;   //Do not allow Iterm to grow when stick position is above this point
+
+    uint8_t     heading_to_roll;
+    int8_t      heading_to_yaw;
 
     uint8_t     loiter_direction;               // Direction of loitering center point on right wing (clockwise - as before), or center point on left wing (counterclockwise)
     float       navVelXyDTermLpfHz;
