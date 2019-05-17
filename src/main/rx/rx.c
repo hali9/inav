@@ -582,7 +582,7 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
     return true;
 }
 
-void applyAuxChannelsOnFailsafe() {
+void applyAuxChannelsOnFailsafe(void) {
     for (int channel = NON_AUX_CHANNEL_COUNT; channel < rxRuntimeConfig.channelCount; channel++) {
         int16_t auxFail = ABS(*rxChannelAuxConfigs(channel - NON_AUX_CHANNEL_COUNT));
         if (auxFail > 1) {
