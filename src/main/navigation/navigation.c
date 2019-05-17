@@ -1384,8 +1384,8 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                     } else {
                         int32_t activeYaw = posControl.waypointList[posControl.activeWaypointIndex].p3 * 100;
                         int32_t angle = ABS(activeYaw) - posControl.lastWaypoint.yaw;
-                        if (angle < 0) angle += 36000;
-                        if (activeYaw < 0) angle = -angle; //counterclockwise
+                        if (posControl.lastWaypoint.yaw > activeYaw && activeYaw > 0) angle += 36000;
+                        if (activeYaw > posControl.lastWaypoint.yaw && activeYaw < 0) angle -= 36000;
                         int32_t head = scaleRange(
                             calculateDistanceToDestination(&posControl.activeWaypoint.pos), //from current position to active waypoint
                             calculateDistance(&posControl.activeWaypoint.pos, &posControl.lastWaypoint.pos), //between last waypoint and active waypoint                    
