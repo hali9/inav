@@ -324,6 +324,7 @@ typedef struct {
     navWaypointPosition_t       homePosition;       // Special waypoint, stores original yaw (heading when launched)
     navWaypointPosition_t       homeWaypointAbove;  // NEU-coordinates and initial bearing + desired RTH altitude
     navigationHomeFlags_t       homeFlags;
+    uint32_t                    rthInitialHomeDistance;  // Distance to home after RTH has been initiated and the initial climb/descent is done
 
     uint32_t                    homeDistance;   // cm
     int32_t                     homeDirection;  // deg*100
@@ -338,6 +339,7 @@ typedef struct {
 
     navWaypointPosition_t       activeWaypoint;     // Local position and initial bearing, filled on waypoint activation
     int8_t                      activeWaypointIndex;
+    navWaypointPosition_t       lastWaypoint; 
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];
@@ -357,9 +359,9 @@ float navPidApply2(pidController_t *pid, const float setpoint, const float measu
 float navPidApply3(pidController_t *pid, const float setpoint, const float measurement, const float dt, const float outMin, const float outMax, const pidControllerFlags_e pidFlags, const float gainScaler);
 void navPidReset(pidController_t *pid);
 void navPidInit(pidController_t *pid, float _kP, float _kI, float _kD, float _kFF, float _dTermLpfHz);
-void navPInit(pController_t *p, float _kP);
 
 bool isThrustFacingDownwards(void);
+uint32_t calculateDistance(const fpVector3_t * fromPos, const fpVector3_t * toPos);
 uint32_t calculateDistanceToDestination(const fpVector3_t * destinationPos);
 int32_t calculateBearingToDestination(const fpVector3_t * destinationPos);
 void resetLandingDetector(void);

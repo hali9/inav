@@ -332,7 +332,9 @@ static void updatePositionHeadingController_FW(timeUs_t currentTimeUs, timeDelta
     rollAdjustment = pt1FilterApply4(&fwPosControllerCorrectionFilterState, rollAdjustment, NAV_FW_ROLL_CUTOFF_FREQUENCY_HZ, US2S(deltaMicros));
 
     // Convert rollAdjustment to decidegrees (rcAdjustment holds decidegrees)
-    posControl.rcAdjustment[ROLL] = CENTIDEGREES_TO_DECIDEGREES(rollAdjustment);
+    posControl.rcAdjustment[ROLL] = CENTIDEGREES_TO_DECIDEGREES(rollAdjustment) * pidProfile()->heading_to_roll / 100;
+
+    posControl.rcAdjustment[YAW] = CENTIDEGREES_TO_DECIDEGREES(rollAdjustment) * pidProfile()->heading_to_yaw / 100;
 }
 
 void applyFixedWingPositionController(timeUs_t currentTimeUs)
@@ -432,6 +434,11 @@ int16_t applyFixedWingMinSpeedController(timeUs_t currentTimeUs)
     return throttleSpeedAdjustment;
 }
 
+int16_t fixedWingPitchToThrottleCorrection(int16_t pitch)
+{
+    return DECIDEGREES_TO_DEGREES(pitch) * navConfig()->fw.pitch_to_throttle;
+}
+
 void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStateFlags, timeUs_t currentTimeUs)
 {
     int16_t minThrottleCorrection = navConfig()->fw.min_throttle - navConfig()->fw.cruise_throttle;
@@ -441,13 +448,21 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
         // ROLL >0 right, <0 left
         int16_t rollCorrection = constrain(posControl.rcAdjustment[ROLL], -DEGREES_TO_DECIDEGREES(navConfig()->fw.max_bank_angle), DEGREES_TO_DECIDEGREES(navConfig()->fw.max_bank_angle));
         rcCommand[ROLL] = pidAngleToRcCommand(rollCorrection, pidProfile()->max_angle_inclination[FD_ROLL]);
+
+        //int16_t yawCorrection = constrain(posControl.rcAdjustment[YAW], -DEGREES_TO_DECIDEGREES(navConfig()->fw.max_bank_angle), DEGREES_TO_DECIDEGREES(navConfig()->fw.max_bank_angle));
+		//rcCommand[YAW] = pidAngleToRcCommand(yawCorrection, pidProfile()->max_angle_inclination[FD_ROLL]);
+        int16_t yawCorrection = constrain(posControl.rcAdjustment[YAW], 
+                                         -DEKADEGREES_TO_DECIDEGREES(currentControlRateProfile->stabilized.rates[FD_YAW]),
+                                          DEKADEGREES_TO_DECIDEGREES(currentControlRateProfile->stabilized.rates[FD_YAW]));
+		rcCommand[YAW] = pidRateToRcCommand(DECIDEGREES_TO_DEGREES(yawCorrection),
+                                            currentControlRateProfile->stabilized.rates[FD_YAW]);
     }
 
     if (isPitchAdjustmentValid && (navStateFlags & NAV_CTL_ALT)) {
         // PITCH >0 dive, <0 climb
         int16_t pitchCorrection = constrain(posControl.rcAdjustment[PITCH], -DEGREES_TO_DECIDEGREES(navConfig()->fw.max_dive_angle), DEGREES_TO_DECIDEGREES(navConfig()->fw.max_climb_angle));
         rcCommand[PITCH] = -pidAngleToRcCommand(pitchCorrection, pidProfile()->max_angle_inclination[FD_PITCH]);
-        int16_t throttleCorrection = DECIDEGREES_TO_DEGREES(pitchCorrection) * navConfig()->fw.pitch_to_throttle;
+        int16_t throttleCorrection = fixedWingPitchToThrottleCorrection(pitchCorrection);
 
 #ifdef NAV_FIXED_WING_LANDING
         if (navStateFlags & NAV_CTL_LAND) {
@@ -500,7 +515,9 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
 
             // Stabilize PITCH angle into shallow dive as specified by the nav_fw_land_dive_angle setting (default value is 2 - defined in navigation.c).
             rcCommand[PITCH] = pidAngleToRcCommand(DEGREES_TO_DECIDEGREES(navConfig()->fw.land_dive_angle), pidProfile()->max_angle_inclination[FD_PITCH]);
-        }
+
+            rcCommand[YAW] = 0;
+	}
     }
 #endif
 }
