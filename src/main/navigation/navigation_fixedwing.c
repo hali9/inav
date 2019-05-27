@@ -365,7 +365,7 @@ bool adjustFixedWingPositionFromRCInput(void)
 static void updatePositionHeadingController_FW(timeUs_t currentTimeUs, timeDelta_t deltaMicros)
 {
     static timeUs_t previousTimeMonitoringUpdate;
-    static float previousHeadingError;
+    static int32_t previousHeadingError;
     static bool errorIsDecreasing;
     static bool forceTurnDirection = false;
 
@@ -412,7 +412,9 @@ static void updatePositionHeadingController_FW(timeUs_t currentTimeUs, timeDelta
     rollAdjustment = pt1FilterApply4(&fwPosControllerCorrectionFilterState, rollAdjustment, NAV_FW_ROLL_CUTOFF_FREQUENCY_HZ, US2S(deltaMicros));
 
     // Convert rollAdjustment to decidegrees (rcAdjustment holds decidegrees)
-    posControl.rcAdjustment[ROLL] = CENTIDEGREES_TO_DECIDEGREES(rollAdjustment);
+    posControl.rcAdjustment[ROLL] = CENTIDEGREES_TO_DECIDEGREES(rollAdjustment) * pidProfile()->heading_to_roll / 100;
+
+    posControl.rcAdjustment[YAW] = CENTIDEGREES_TO_DECIDEGREES(rollAdjustment) * pidProfile()->heading_to_yaw / 100;
 }
 
 void applyFixedWingPositionController(navigationFSMStateFlags_t navStateFlags, timeUs_t currentTimeUs)
@@ -490,7 +492,7 @@ int16_t applyFixedWingMinSpeedController(timeUs_t currentTimeUs)
                 float velThrottleBoost = (NAV_FW_MIN_VEL_SPEED_BOOST - posControl.actualState.velXY) * NAV_FW_THROTTLE_SPEED_BOOST_GAIN * US2S(deltaMicrosPositionUpdate);
 
                 // If we are in the deadband of 50cm/s - don't update speed boost
-                if (ABS(posControl.actualState.velXY - NAV_FW_MIN_VEL_SPEED_BOOST) > 50) {
+                if (fabsf(posControl.actualState.velXY - NAV_FW_MIN_VEL_SPEED_BOOST) > 50) {
                     throttleSpeedAdjustment += velThrottleBoost;
                 }
 
@@ -512,6 +514,11 @@ int16_t applyFixedWingMinSpeedController(timeUs_t currentTimeUs)
     return throttleSpeedAdjustment;
 }
 
+int16_t fixedWingPitchToThrottleCorrection(int16_t pitch)
+{
+    return DECIDEGREES_TO_DEGREES(pitch) * navConfig()->fw.pitch_to_throttle;
+}
+
 void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStateFlags, timeUs_t currentTimeUs)
 {
     int16_t minThrottleCorrection = navConfig()->fw.min_throttle - navConfig()->fw.cruise_throttle;
@@ -521,13 +528,21 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
         // ROLL >0 right, <0 left
         int16_t rollCorrection = constrain(posControl.rcAdjustment[ROLL], -DEGREES_TO_DECIDEGREES(navConfig()->fw.max_bank_angle), DEGREES_TO_DECIDEGREES(navConfig()->fw.max_bank_angle));
         rcCommand[ROLL] = pidAngleToRcCommand(rollCorrection, pidProfile()->max_angle_inclination[FD_ROLL]);
+
+        //int16_t yawCorrection = constrain(posControl.rcAdjustment[YAW], -DEGREES_TO_DECIDEGREES(navConfig()->fw.max_bank_angle), DEGREES_TO_DECIDEGREES(navConfig()->fw.max_bank_angle));
+		//rcCommand[YAW] = pidAngleToRcCommand(yawCorrection, pidProfile()->max_angle_inclination[FD_ROLL]);
+        int16_t yawCorrection = constrain(posControl.rcAdjustment[YAW], 
+                                         -DEKADEGREES_TO_DECIDEGREES(currentControlRateProfile->stabilized.rates[FD_YAW]),
+                                          DEKADEGREES_TO_DECIDEGREES(currentControlRateProfile->stabilized.rates[FD_YAW]));
+		rcCommand[YAW] = pidRateToRcCommand(DECIDEGREES_TO_DEGREES(yawCorrection),
+                                            currentControlRateProfile->stabilized.rates[FD_YAW]);
     }
 
     if (isPitchAdjustmentValid && (navStateFlags & NAV_CTL_ALT)) {
         // PITCH >0 dive, <0 climb
         int16_t pitchCorrection = constrain(posControl.rcAdjustment[PITCH], -DEGREES_TO_DECIDEGREES(navConfig()->fw.max_dive_angle), DEGREES_TO_DECIDEGREES(navConfig()->fw.max_climb_angle));
         rcCommand[PITCH] = -pidAngleToRcCommand(pitchCorrection, pidProfile()->max_angle_inclination[FD_PITCH]);
-        int16_t throttleCorrection = DECIDEGREES_TO_DEGREES(pitchCorrection) * navConfig()->fw.pitch_to_throttle;
+        int16_t throttleCorrection = fixedWingPitchToThrottleCorrection(pitchCorrection);
 
 #ifdef NAV_FIXED_WING_LANDING
         if (navStateFlags & NAV_CTL_LAND) {
@@ -568,26 +583,20 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
      * TODO refactor conditions in this metod if logic is proven to be correct
      */
     if (navStateFlags & NAV_CTL_LAND) {
-        if ((navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_ALWAYS) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_APROACH && virtualAproach==NAV_RTH_APROACH_LANDING_FINAL) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE)) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_ONLY_APR && FLIGHT_MODE(FAILSAFE_MODE) && virtualAproach==NAV_RTH_APROACH_LANDING_FINAL) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_NO_APR && !FLIGHT_MODE(FAILSAFE_MODE) && virtualAproach==NAV_RTH_APROACH_LANDING_FINAL) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_NO_APR && FLIGHT_MODE(FAILSAFE_MODE))
-           ) {
-            if ( ((posControl.flags.estAltStatus >= EST_USABLE) && (navGetCurrentActualPositionAndVelocity()->pos.z <= navConfig()->fw.land_motor_off_alt)) ||
-                 ((posControl.flags.estAglStatus == EST_TRUSTED) && (posControl.actualState.agl.pos.z <= navConfig()->fw.land_motor_off_alt)) ) {
+        if ( ((posControl.flags.estAltStatus >= EST_USABLE) && (navGetCurrentActualPositionAndVelocity()->pos.z <= navConfig()->fw.land_motor_off_alt)) ||
+             ((posControl.flags.estAglStatus == EST_TRUSTED) && (posControl.actualState.agl.pos.z <= navConfig()->fw.land_motor_off_alt)) ) {
 
-                // Set motor to min. throttle and stop it when MOTOR_STOP feature is enabled
-                rcCommand[THROTTLE] = motorConfig()->minthrottle;
-                ENABLE_STATE(NAV_MOTOR_STOP_OR_IDLE);
+            // Set motor to min. throttle and stop it when MOTOR_STOP feature is enabled
+            rcCommand[THROTTLE] = motorConfig()->minthrottle;
+            ENABLE_STATE(NAV_MOTOR_STOP_OR_IDLE);
 
-                // Stabilize ROLL axis on 0 degrees banking regardless of loiter radius and position
-                rcCommand[ROLL] = 0;
+            // Stabilize ROLL axis on 0 degrees banking regardless of loiter radius and position
+            rcCommand[ROLL] = 0;
 
-                // Stabilize PITCH angle into shallow dive as specified by the nav_fw_land_dive_angle setting (default value is 2 - defined in navigation.c).
-                rcCommand[PITCH] = pidAngleToRcCommand(DEGREES_TO_DECIDEGREES(navConfig()->fw.land_dive_angle), pidProfile()->max_angle_inclination[FD_PITCH]);
-            }
+            // Stabilize PITCH angle into shallow dive as specified by the nav_fw_land_dive_angle setting (default value is 2 - defined in navigation.c).
+            rcCommand[PITCH] = pidAngleToRcCommand(DEGREES_TO_DECIDEGREES(navConfig()->fw.land_dive_angle), pidProfile()->max_angle_inclination[FD_PITCH]);
+              
+            rcCommand[YAW] = 0;              
         }
     }
 #endif
