@@ -86,6 +86,7 @@ static bool mspOverrideDataProcessingRequired = false;
 
 static bool rxSignalReceived = false;
 static bool rxFlightChannelsValid = false;
+static bool rxAuxChannelsValid = false;
 static bool rxIsInFailsafeMode = true;
 
 static timeUs_t rxNextUpdateAtUs = 0;
@@ -154,6 +155,15 @@ void pgResetFn_rxChannelRangeConfigs(rxChannelRangeConfig_t *rxChannelRangeConfi
     for (int i = 0; i < NON_AUX_CHANNEL_COUNT; i++) {
         rxChannelRangeConfigs[i].min = PWM_RANGE_MIN;
         rxChannelRangeConfigs[i].max = PWM_RANGE_MAX;
+    }
+}
+
+PG_REGISTER_ARRAY_WITH_RESET_FN(int16_t, MAX_AUX_CHANNEL_COUNT, rxChannelAuxConfigs, PG_RX_CHANNEL_AUX_CONFIG, 0);
+
+void pgResetFn_rxChannelAuxConfigs(int16_t *rxChannelAuxConfigs)
+{
+    for (int i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+        rxChannelAuxConfigs[i] = 0;
     }
 }
 
@@ -405,6 +415,11 @@ bool rxAreFlightChannelsValid(void)
     return rxFlightChannelsValid;
 }
 
+bool rxAreAuxChannelsValid(void)
+{
+    return rxAuxChannelsValid;
+}
+
 void suspendRxSignal(void)
 {
     failsafeOnRxSuspend();
@@ -522,6 +537,7 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
     }
 
     rxFlightChannelsValid = true;
+    rxAuxChannelsValid = true;
 
     // Read and process channel data
     for (int channel = 0; channel < rxRuntimeConfig.channelCount; channel++) {
@@ -542,8 +558,15 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
         // Apply invalid pulse value logic
         if (!isRxPulseValid(sample)) {
             sample = rcChannels[channel].data;   // hold channel, replace with old value
-            if ((currentTimeMs > rcChannels[channel].expiresAt) && (channel < NON_AUX_CHANNEL_COUNT)) {
-                rxFlightChannelsValid = false;
+            if (currentTimeMs > rcChannels[channel].expiresAt) {
+                if (channel < NON_AUX_CHANNEL_COUNT) {
+                    rxFlightChannelsValid = false;
+                } else {
+                    int16_t auxFail = *rxChannelAuxConfigs(channel - NON_AUX_CHANNEL_COUNT);
+                    if (auxFail > 0) {
+                        rxAuxChannelsValid = false;
+                    }
+                }
             }
         } else {
             rcChannels[channel].expiresAt = currentTimeMs + MAX_INVALID_RX_PULSE_TIME;
@@ -555,7 +578,7 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
 
     // Update channel input value if receiver is not in failsafe mode
     // If receiver is in failsafe (not receiving signal or sending invalid channel values) - last good input values are retained
-    if (rxFlightChannelsValid && rxSignalReceived) {
+    if (rxFlightChannelsValid && rxAuxChannelsValid && rxSignalReceived) {
         if (rxRuntimeConfig.requireFiltering) {
             for (int channel = 0; channel < rxRuntimeConfig.channelCount; channel++) {
                 rcChannels[channel].data = applyChannelFiltering(channel, rcStaging[channel]);
@@ -574,14 +597,24 @@ bool calculateRxChannelsAndUpdateFailsafe(timeUs_t currentTimeUs)
 #endif
 
     // Update failsafe
-    if (rxFlightChannelsValid && rxSignalReceived) {
+    if (rxFlightChannelsValid && rxAuxChannelsValid && rxSignalReceived) {
         failsafeOnValidDataReceived();
     } else {
+        applyAuxChannelsOnFailsafe();
         failsafeOnValidDataFailed();
     }
 
     rcSampleIndex++;
     return true;
+}
+
+void applyAuxChannelsOnFailsafe(void) {
+    for (int channel = NON_AUX_CHANNEL_COUNT; channel < rxRuntimeConfig.channelCount; channel++) {
+        int16_t auxFail = ABS(*rxChannelAuxConfigs(channel - NON_AUX_CHANNEL_COUNT));
+        if (auxFail > 1) {
+            rcChannels[channel].data = auxFail;
+        }
+    }
 }
 
 void parseRcChannels(const char *input)
@@ -659,8 +692,13 @@ static void updateRSSIPWM(void)
     // Read value of AUX channel as rssi
     unsigned rssiChannel = rxConfig()->rssi_channel;
     if (rssiChannel > 0) {
-        pwmRssi = rcChannels[rssiChannel - 1].raw;
-
+        int16_t auxFail = 0;
+        if (rssiChannel - NON_AUX_CHANNEL_COUNT > 0) auxFail = ABS(*rxChannelAuxConfigs(rssiChannel -1 - NON_AUX_CHANNEL_COUNT));
+        if (!(rxFlightChannelsValid && rxAuxChannelsValid && rxSignalReceived) && auxFail > 1) {
+            pwmRssi = auxFail;
+        } else {
+            pwmRssi = rcChannels[rssiChannel - 1].raw;
+        }
         // Range of rawPwmRssi is [1000;2000]. rssi should be in [0;1023];
         uint16_t rawRSSI = (uint16_t)((constrain(pwmRssi - 1000, 0, 1000) / 1000.0f) * (RSSI_MAX_VALUE * 1.0f));
         setRSSI(rawRSSI, RSSI_SOURCE_RX_CHANNEL, false);
