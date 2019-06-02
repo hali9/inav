@@ -1397,10 +1397,10 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                     if (STATE(FIXED_WING) || posControl.waypointList[posControl.activeWaypointIndex].p3 == 0) {
                         setDesiredPosition(&posControl.activeWaypoint.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_BEARING);
                     } else {
-                        int32_t activeYaw = posControl.waypointList[posControl.activeWaypointIndex].p3 * 100;
-                        int32_t angle = ABS(activeYaw) - posControl.lastWaypoint.yaw;
-                        if (posControl.lastWaypoint.yaw > activeYaw && activeYaw > 0) angle += 36000;
-                        if (activeYaw > posControl.lastWaypoint.yaw && activeYaw < 0) angle -= 36000;
+                        int32_t activeYaw = ABS(posControl.waypointList[posControl.activeWaypointIndex].p3) * 100;
+                        int32_t angle = activeYaw - posControl.lastWaypoint.yaw;
+                        if (posControl.lastWaypoint.yaw > activeYaw && posControl.waypointList[posControl.activeWaypointIndex].p3 > 0) angle += 36000;
+                        if (activeYaw > posControl.lastWaypoint.yaw && posControl.waypointList[posControl.activeWaypointIndex].p3 < 0) angle -= 36000;
                         int32_t head = scaleRange(
                             calculateDistanceToDestination(&posControl.activeWaypoint.pos), //from current position to active waypoint
                             calculateDistance(&posControl.activeWaypoint.pos, &posControl.lastWaypoint.pos), //between last waypoint and active waypoint                    
