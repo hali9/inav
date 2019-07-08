@@ -589,26 +589,18 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
      * TODO refactor conditions in this metod if logic is proven to be correct
      */
     if (navStateFlags & NAV_CTL_LAND) {
-        if ((navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_ALWAYS) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_APROACH && virtualAproach==NAV_RTH_APROACH_LANDING_FINAL) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE)) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_ONLY_APR && FLIGHT_MODE(FAILSAFE_MODE) && virtualAproach==NAV_RTH_APROACH_LANDING_FINAL) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_NO_APR && !FLIGHT_MODE(FAILSAFE_MODE) && virtualAproach==NAV_RTH_APROACH_LANDING_FINAL) ||
-            (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_NO_APR && FLIGHT_MODE(FAILSAFE_MODE))
-           ) {
-            if ( ((posControl.flags.estAltStatus >= EST_USABLE) && (navGetCurrentActualPositionAndVelocity()->pos.z <= navConfig()->fw.land_motor_off_alt)) ||
-                 ((posControl.flags.estAglStatus == EST_TRUSTED) && (posControl.actualState.agl.pos.z <= navConfig()->fw.land_motor_off_alt)) ) {
+        if ( ((posControl.flags.estAltStatus >= EST_USABLE) && (navGetCurrentActualPositionAndVelocity()->pos.z <= navConfig()->fw.land_motor_off_alt)) ||
+             ((posControl.flags.estAglStatus == EST_TRUSTED) && (posControl.actualState.agl.pos.z <= navConfig()->fw.land_motor_off_alt)) ) {
 
-                // Set motor to min. throttle and stop it when MOTOR_STOP feature is enabled
-                rcCommand[THROTTLE] = motorConfig()->minthrottle;
-                ENABLE_STATE(NAV_MOTOR_STOP_OR_IDLE);
+            // Set motor to min. throttle and stop it when MOTOR_STOP feature is enabled
+            rcCommand[THROTTLE] = motorConfig()->minthrottle;
+            ENABLE_STATE(NAV_MOTOR_STOP_OR_IDLE);
 
-                // Stabilize ROLL axis on 0 degrees banking regardless of loiter radius and position
-                rcCommand[ROLL] = 0;
+            // Stabilize ROLL axis on 0 degrees banking regardless of loiter radius and position
+            rcCommand[ROLL] = 0;
 
-                // Stabilize PITCH angle into shallow dive as specified by the nav_fw_land_dive_angle setting (default value is 2 - defined in navigation.c).
-                rcCommand[PITCH] = pidAngleToRcCommand(DEGREES_TO_DECIDEGREES(navConfig()->fw.land_dive_angle), pidProfile()->max_angle_inclination[FD_PITCH]);
-            }
+            // Stabilize PITCH angle into shallow dive as specified by the nav_fw_land_dive_angle setting (default value is 2 - defined in navigation.c).
+            rcCommand[PITCH] = pidAngleToRcCommand(DEGREES_TO_DECIDEGREES(navConfig()->fw.land_dive_angle), pidProfile()->max_angle_inclination[FD_PITCH]);
         }
     }
 #endif
