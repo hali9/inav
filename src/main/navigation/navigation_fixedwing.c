@@ -345,13 +345,13 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
             }
         }
 #endif
-        // We are closing in on a waypoint, calculate circular loiter
-        float loiterAngle = atan2_approx(-posErrorY, -posErrorX) + DEGREES_TO_RADIANS(loiterDirection() * 45.0f);
-
-        float loiterTargetX = posControl.desiredState.pos.x + aproachPosX + navConfig()->fw.loiter_radius * cos_approx(loiterAngle);
-        float loiterTargetY = posControl.desiredState.pos.y + aproachPosY + navConfig()->fw.loiter_radius * sin_approx(loiterAngle);
-
         if (virtualAproach < NAV_RTH_APROACH_LANDING_HOMEYAW) {
+            // We are closing in on a waypoint, calculate circular loiter
+            float loiterAngle = atan2_approx(-posErrorY, -posErrorX) + DEGREES_TO_RADIANS(loiterDirection() * 45.0f);
+
+            float loiterTargetX = posControl.desiredState.pos.x + aproachPosX + navConfig()->fw.loiter_radius * cos_approx(loiterAngle);
+            float loiterTargetY = posControl.desiredState.pos.y + aproachPosY + navConfig()->fw.loiter_radius * sin_approx(loiterAngle);
+
             // We have temporary loiter target. Recalculate distance and position error
             posErrorX = loiterTargetX - navGetCurrentActualPositionAndVelocity()->pos.x;
             posErrorY = loiterTargetY - navGetCurrentActualPositionAndVelocity()->pos.y;
