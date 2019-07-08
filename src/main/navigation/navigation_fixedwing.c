@@ -66,7 +66,7 @@ static bool isAutoThrottleManuallyIncreased = false;
 static int32_t navHeadingError;
 static int8_t loiterDirYaw = 1;
 static uint8_t virtualAproach = NAV_RTH_APROACH_LANDING_ABOVE_MAXALT;
-
+static bool aproachAlt = 0;
 
 /*-----------------------------------------------------------
  * Altitude controller
@@ -83,6 +83,7 @@ void resetFixedWingAltitudeController(void)
     isPitchAdjustmentValid = false;
     throttleSpeedAdjustment = 0;
     virtualAproach = NAV_RTH_APROACH_LANDING_ABOVE_MAXALT;
+    aproachAlt = false;
 }
 
 bool adjustFixedWingAltitudeFromRCInput(void)
@@ -110,8 +111,25 @@ static void updateAltitudeVelocityAndPitchController_FW(timeDelta_t deltaMicros)
     if (virtualAproach == NAV_RTH_APROACH_LANDING_MAXALT) {
         posControl.desiredState.pos.z = navConfig()->general.land_slowdown_maxalt;
     }
-    if (virtualAproach == NAV_RTH_APROACH_LANDING_MINALT) {
+    if (virtualAproach == NAV_RTH_APROACH_LANDING_MINALT || virtualAproach == NAV_RTH_APROACH_LANDING_HOMEYAW) {
         posControl.desiredState.pos.z = navConfig()->fw.land_safe_alt;
+    }
+    if (virtualAproach == NAV_RTH_APROACH_LANDING_FINAL) {
+        if (!aproachAlt) {
+            navPidReset(&posControl.pids.fw_alt);
+            aproachAlt = true;
+        }
+        float loiterAproachAlt = CENTIDEGREES_TO_RADIANS(posControl.homeWaypointAbove.yaw);
+					
+        float aproachAltX = posControl.desiredState.pos.x + navConfig()->fw.land_aproach_distance * cos_approx(loiterAproachAlt);
+        float aproachAltY = posControl.desiredState.pos.y + navConfig()->fw.land_aproach_distance * sin_approx(loiterAproachAlt);
+					
+        float posErrorX = aproachAltX - navGetCurrentActualPositionAndVelocity()->pos.x;
+        float posErrorY = aproachAltY - navGetCurrentActualPositionAndVelocity()->pos.y;
+        float distanceToActualTarget = sqrtf(sq(posErrorX) + sq(posErrorY));
+
+        posControl.desiredState.pos.z = scaleRangef(distanceToActualTarget, 0, navConfig()->fw.land_aproach_distance * 2, 0, navConfig()->fw.land_safe_alt);
+        if (posControl.desiredState.pos.z > navConfig()->fw.land_safe_alt) posControl.desiredState.pos.z = navConfig()->fw.land_safe_alt;
     }
 
     static pt1Filter_t velzFilterState;
@@ -222,6 +240,7 @@ void resetFixedWingPositionController(void)
     isRollAdjustmentValid = false;
 
     virtualAproach = NAV_RTH_APROACH_LANDING_ABOVE_MAXALT;
+    aproachAlt = false;
 
     pt1FilterReset(&fwPosControllerCorrectionFilterState, 0.0f);
 }
@@ -301,6 +320,7 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
 					
                     posErrorX = aproachPosX - navGetCurrentActualPositionAndVelocity()->pos.x;
                     posErrorY = aproachPosY - navGetCurrentActualPositionAndVelocity()->pos.y;
+                    distanceToActualTarget = sqrtf(sq(posErrorX) + sq(posErrorY));
                 }
                 if (virtualAproach == NAV_RTH_APROACH_LANDING_FINAL) {
                     float loiterAproachEnd = CENTIDEGREES_TO_RADIANS(posControl.homeWaypointAbove.yaw);
@@ -320,6 +340,7 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
 					
                     posErrorX = aproachPosX - navGetCurrentActualPositionAndVelocity()->pos.x;
                     posErrorY = aproachPosY - navGetCurrentActualPositionAndVelocity()->pos.y;
+                    distanceToActualTarget = sqrtf(sq(posErrorX) + sq(posErrorY));
                 }                
             }
         }
