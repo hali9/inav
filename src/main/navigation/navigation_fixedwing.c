@@ -294,7 +294,7 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
                     virtualAproach = MAX(virtualAproach, NAV_RTH_APROACH_LANDING_MAXALT);
                 }               
                 float distanceAproach = sqrtf(sq(navConfig()->fw.loiter_radius) + sq(navConfig()->fw.land_aproach_distance));
-                int32_t angle = loiterDirection() * DEGREES_TO_CENTIDEGREES(180 - RADIANS_TO_DEGREES(acos_approx(navConfig()->fw.loiter_radius / distanceAproach)));
+                int32_t angle = loiterDirection() * DEGREES_TO_CENTIDEGREES(180 - RADIANS_TO_DEGREES(acos_approx(navConfig()->fw.land_aproach_distance / distanceAproach)));
                 DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 1, angle);
                 if ((ABS(wrap_18000(((posControl.homeWaypointAbove.yaw + angle) % DEGREES_TO_CENTIDEGREES(360)) - posControl.actualState.yaw)) < DEGREES_TO_CENTIDEGREES(15)) &&
                     (virtualAproach == NAV_RTH_APROACH_LANDING_MAXALT)) {
