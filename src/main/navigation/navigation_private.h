@@ -169,7 +169,8 @@ typedef enum {
     NAV_PERSISTENT_ID_RTH_CLIMB_TO_SAFE_ALT                     = 9,
     NAV_PERSISTENT_ID_RTH_HEAD_HOME                             = 10,
     NAV_PERSISTENT_ID_RTH_HOVER_PRIOR_TO_LANDING                = 11,
-    NAV_PERSISTENT_ID_RTH_HOVER_ABOVE_HOME                      = 29,
+    NAV_PERSISTENT_ID_RTH_WAIT_ABOVE_HOME                       = 37,
+    NAV_PERSISTENT_ID_RTH_HOVER_ABOVE_HOME                      = 35,
     NAV_PERSISTENT_ID_RTH_LANDING                               = 12,
     NAV_PERSISTENT_ID_RTH_FINISHING                             = 13,
     NAV_PERSISTENT_ID_RTH_FINISHED                              = 14,
@@ -177,6 +178,7 @@ typedef enum {
     NAV_PERSISTENT_ID_WAYPOINT_INITIALIZE                       = 15,
     NAV_PERSISTENT_ID_WAYPOINT_PRE_ACTION                       = 16,
     NAV_PERSISTENT_ID_WAYPOINT_IN_PROGRESS                      = 17,
+    NAV_PERSISTENT_ID_WAYPOINT_WAIT                             = 36,
     NAV_PERSISTENT_ID_WAYPOINT_REACHED                          = 18,
     NAV_PERSISTENT_ID_WAYPOINT_NEXT                             = 19,
     NAV_PERSISTENT_ID_WAYPOINT_FINISHED                         = 20,
@@ -215,6 +217,7 @@ typedef enum {
     NAV_STATE_RTH_CLIMB_TO_SAFE_ALT,
     NAV_STATE_RTH_HEAD_HOME,
     NAV_STATE_RTH_HOVER_PRIOR_TO_LANDING,
+    NAV_STATE_RTH_WAIT_ABOVE_HOME,
     NAV_STATE_RTH_HOVER_ABOVE_HOME,
     NAV_STATE_RTH_LANDING,
     NAV_STATE_RTH_FINISHING,
@@ -223,6 +226,7 @@ typedef enum {
     NAV_STATE_WAYPOINT_INITIALIZE,
     NAV_STATE_WAYPOINT_PRE_ACTION,
     NAV_STATE_WAYPOINT_IN_PROGRESS,
+    NAV_STATE_WAYPOINT_WAIT,
     NAV_STATE_WAYPOINT_REACHED,
     NAV_STATE_WAYPOINT_NEXT,
     NAV_STATE_WAYPOINT_FINISHED,
@@ -298,6 +302,23 @@ typedef struct {
 } navCruise_t;
 
 typedef struct {
+    navigationHomeFlags_t   homeFlags;
+    navWaypointPosition_t   homePosition;       // Original home position and base altitude
+    float                   rthInitialAltitude; // Altitude at start of RTH
+    float                   rthFinalAltitude;   // Altitude at end of RTH approach
+    float                   rthInitialDistance; // Distance when starting flight home
+    fpVector3_t             homeTmpWaypoint;    // Temporary storage for home target
+} rthState_t;
+
+typedef enum {
+    RTH_HOME_ENROUTE_INITIAL,       // Initial position for RTH approach
+    RTH_HOME_ENROUTE_PROPORTIONAL,  // Prorpotional position for RTH approach
+    RTH_HOME_ENROUTE_FINAL,         // Final position for RTH approach
+    RTH_HOME_FINAL_HOVER,           // Final hover altitude (if rth_home_altitude is set)
+    RTH_HOME_FINAL_LAND,            // Home position and altitude
+} rthTargetMode_e;
+
+typedef struct {
     /* Flags and navigation system state */
     navigationFSMState_t        navState;
     navigationPersistentId_e    navPersistentId;
@@ -321,10 +342,9 @@ typedef struct {
 
     /* Home parameters (NEU coordinated), geodetic position of home (LLH) is stores in GPS_home variable */
     rthSanityChecker_t          rthSanityChecker;
-    navWaypointPosition_t       homePosition;       // Special waypoint, stores original yaw (heading when launched)
-    navWaypointPosition_t       homeWaypointAbove;  // NEU-coordinates and initial bearing + desired RTH altitude
-    navigationHomeFlags_t       homeFlags;
+    rthState_t                  rthState;
 
+    /* Home parameters */
     uint32_t                    homeDistance;   // cm
     int32_t                     homeDirection;  // deg*100
 
@@ -338,6 +358,7 @@ typedef struct {
 
     navWaypointPosition_t       activeWaypoint;     // Local position and initial bearing, filled on waypoint activation
     int8_t                      activeWaypointIndex;
+    uint32_t                    lastWaypointReachedAt;
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];
@@ -357,7 +378,6 @@ float navPidApply2(pidController_t *pid, const float setpoint, const float measu
 float navPidApply3(pidController_t *pid, const float setpoint, const float measurement, const float dt, const float outMin, const float outMax, const pidControllerFlags_e pidFlags, const float gainScaler);
 void navPidReset(pidController_t *pid);
 void navPidInit(pidController_t *pid, float _kP, float _kI, float _kD, float _kFF, float _dTermLpfHz);
-void navPInit(pController_t *p, float _kP);
 
 bool isThrustFacingDownwards(void);
 uint32_t calculateDistanceToDestination(const fpVector3_t * destinationPos);
@@ -375,6 +395,7 @@ void updateClimbRateToAltitudeController(float desiredClimbRate, climbRateToAlti
 
 bool isWaypointReached(const navWaypointPosition_t * waypoint, const bool isWaypointHome);
 bool isWaypointMissed(const navWaypointPosition_t * waypoint);
+bool isWaypointWait(void);
 bool isApproachingLastWaypoint(void);
 float getActiveWaypointSpeed(void);
 

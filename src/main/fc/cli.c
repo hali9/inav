@@ -50,12 +50,12 @@ extern uint8_t __config_end;
 #include "config/parameter_group_ids.h"
 
 #include "drivers/accgyro/accgyro.h"
+#include "drivers/pwm_mapping.h"
 #include "drivers/buf_writer.h"
 #include "drivers/bus_i2c.h"
 #include "drivers/compass/compass.h"
 #include "drivers/io.h"
 #include "drivers/io_impl.h"
-#include "drivers/logging.h"
 #include "drivers/osd_symbols.h"
 #include "drivers/rx_pwm.h"
 #include "drivers/sdcard.h"
@@ -135,10 +135,6 @@ static uint32_t bufferIndex = 0;
 static void cliAssert(char *cmdline);
 #endif
 
-#if defined(USE_BOOTLOG)
-static void cliBootlog(char *cmdline);
-#endif
-
 // sync this with features_e
 static const char * const featureNames[] = {
     "THR_VBAT_COMP", "VBAT", "TX_PROF_SEL", "BAT_PROF_AUTOSWITCH", "MOTOR_STOP",
@@ -188,7 +184,7 @@ static const char * const *sensorHardwareNames[] = {
 #else
         NULL,
 #endif
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
         table_opflow_hardware,
 #else
         NULL,
@@ -580,46 +576,6 @@ static void cliAssert(char *cmdline)
 }
 #endif
 
-#if defined(USE_BOOTLOG)
-static void cliBootlog(char *cmdline)
-{
-    UNUSED(cmdline);
-
-    int bootEventCount = getBootlogEventCount();
-
-#if defined(BOOTLOG_DESCRIPTIONS)
-    cliPrintLine("Time Evt            Description  Parameters");
-#else
-    cliPrintLine("Time Evt Parameters");
-#endif
-
-    for (int idx = 0; idx < bootEventCount; idx++) {
-        bootLogEntry_t * event = getBootlogEvent(idx);
-
-#if defined(BOOTLOG_DESCRIPTIONS)
-        const char * eventDescription = getBootlogEventDescription(event->eventCode);
-        if (!eventDescription) {
-            eventDescription = "";
-        }
-
-        cliPrintf("%4d: %2d %22s ", event->timestamp, event->eventCode, eventDescription);
-#else
-        cliPrintf("%4d: %2d ", event->timestamp, event->eventCode);
-#endif
-
-        if (event->eventFlags & BOOT_EVENT_FLAGS_PARAM16) {
-            cliPrintLinef(" (%d, %d, %d, %d)", event->params.u16[0], event->params.u16[1], event->params.u16[2], event->params.u16[3]);
-        }
-        else if (event->eventFlags & BOOT_EVENT_FLAGS_PARAM32) {
-            cliPrintLinef(" (%d, %d)", event->params.u32[0], event->params.u32[1]);
-        }
-        else {
-            cliPrintLinefeed();
-        }
-    }
-}
-#endif
-
 static void printAux(uint8_t dumpMask, const modeActivationCondition_t *modeActivationConditions, const modeActivationCondition_t *defaultModeActivationConditions)
 {
     const char *format = "aux %u %u %u %u %u";
@@ -733,7 +689,6 @@ static void cliSerial(char *cmdline)
         return;
     }
     serialPortConfig_t portConfig;
-    memset(&portConfig, 0 , sizeof(portConfig));
 
     serialPortConfig_t *currentConfig;
 
@@ -743,15 +698,35 @@ static void cliSerial(char *cmdline)
 
     int val = fastA2I(ptr++);
     currentConfig = serialFindPortConfiguration(val);
-    if (currentConfig) {
-        portConfig.identifier = val;
-        validArgumentCount++;
+    if (!currentConfig) {
+        // Invalid port ID
+        cliPrintLinef("Invalid port ID %d", val);
+        return;
     }
+    memcpy(&portConfig, currentConfig, sizeof(portConfig));
+    validArgumentCount++;
 
     ptr = nextArg(ptr);
     if (ptr) {
-        val = fastA2I(ptr);
-        portConfig.functionMask = val & 0xFFFFFFFF;
+        switch (*ptr) {
+            case '+':
+                // Add function
+                ptr++;
+                val = fastA2I(ptr);
+                portConfig.functionMask |= (1 << val);
+                break;
+            case '-':
+                // Remove function
+                ptr++;
+                val = fastA2I(ptr);
+                portConfig.functionMask &= 0xFFFFFFFF ^ (1 << val);
+                break;
+            default:
+                // Set functions
+                val = fastA2I(ptr);
+                portConfig.functionMask = val & 0xFFFFFFFF;
+                break;
+        }
         validArgumentCount++;
     }
 
@@ -798,7 +773,7 @@ static void cliSerial(char *cmdline)
         validArgumentCount++;
     }
 
-    if (validArgumentCount < 6) {
+    if (validArgumentCount < 2) {
         cliShowParseError();
         return;
     }
@@ -845,7 +820,7 @@ static void cliSerialPassthrough(char *cmdline)
     serialPortUsage_t *passThroughPortUsage = findSerialPortUsageByIdentifier(id);
     if (!passThroughPortUsage || passThroughPortUsage->serialPort == NULL) {
         if (!baud) {
-            printf("Port %d is closed, must specify baud.\r\n", id);
+            tfp_printf("Port %d is closed, must specify baud.\r\n", id);
             return;
         }
         if (!mode)
@@ -855,29 +830,29 @@ static void cliSerialPassthrough(char *cmdline)
                                          baud, mode,
                                          SERIAL_NOT_INVERTED);
         if (!passThroughPort) {
-            printf("Port %d could not be opened.\r\n", id);
+            tfp_printf("Port %d could not be opened.\r\n", id);
             return;
         }
-        printf("Port %d opened, baud = %d.\r\n", id, baud);
+        tfp_printf("Port %d opened, baud = %u.\r\n", id, (unsigned)baud);
     } else {
         passThroughPort = passThroughPortUsage->serialPort;
         // If the user supplied a mode, override the port's mode, otherwise
         // leave the mode unchanged. serialPassthrough() handles one-way ports.
-        printf("Port %d already open.\r\n", id);
+        tfp_printf("Port %d already open.\r\n", id);
         if (mode && passThroughPort->mode != mode) {
-            printf("Adjusting mode from %d to %d.\r\n",
+            tfp_printf("Adjusting mode from %d to %d.\r\n",
                    passThroughPort->mode, mode);
             serialSetMode(passThroughPort, mode);
         }
         // If this port has a rx callback associated we need to remove it now.
         // Otherwise no data will be pushed in the serial port buffer!
         if (passThroughPort->rxCallback) {
-            printf("Removing rxCallback\r\n");
+            tfp_printf("Removing rxCallback\r\n");
             passThroughPort->rxCallback = 0;
         }
     }
 
-    printf("Forwarding data to %d, power cycle to exit.\r\n", id);
+    tfp_printf("Forwarding data to %d, power cycle to exit.\r\n", id);
 
     serialPassthrough(cliPort, passThroughPort, NULL, NULL);
 }
@@ -1129,6 +1104,62 @@ static void cliRxRange(char *cmdline)
     }
 }
 
+static void printRxAux(uint8_t dumpMask, const int16_t *channelAuxConfigs, const int16_t *defaultChannelAuxConfigs)
+{
+    const char *format = "rxaux %u %d";
+    for (uint8_t i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+        bool equalsDefault = false;
+        if (defaultChannelAuxConfigs) {
+            equalsDefault = channelAuxConfigs[i] == defaultChannelAuxConfigs[i];
+            cliDefaultPrintLinef(dumpMask, equalsDefault, format,
+                i,
+                defaultChannelAuxConfigs[i]
+            );
+        }
+        cliDumpPrintLinef(dumpMask, equalsDefault, format,
+            i,
+            channelAuxConfigs[i]
+        );
+    }
+}
+
+static void cliRxAux(char *cmdline)
+{
+    int i, validArgumentCount = 0;
+    const char *ptr;
+
+    if (isEmpty(cmdline)) {
+	printRxAux(DUMP_MASTER, rxChannelAuxConfigs(0), NULL);
+    } else if (sl_strcasecmp(cmdline, "reset") == 0) {
+	for (int i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+            (*rxChannelAuxConfigsMutable(i)) = 0;
+        }
+    } else {
+        ptr = cmdline;
+        i = fastA2I(ptr);
+        if (i >= 0 && i < MAX_AUX_CHANNEL_COUNT) {
+            int auxValue;
+
+            ptr = nextArg(ptr);
+            if (ptr) {
+                auxValue = fastA2I(ptr);
+                validArgumentCount++;
+            }
+
+            if (validArgumentCount != 1) {
+                cliShowParseError();
+            } else if ((PWM_PULSE_MIN <= auxValue && auxValue <= PWM_PULSE_MAX) || auxValue == 1
+		    || (-PWM_PULSE_MAX <= auxValue && auxValue <= -PWM_PULSE_MIN) || auxValue == 0) {
+                (*rxChannelAuxConfigsMutable(i)) = auxValue;
+            } else {
+                cliShowParseError();
+            }
+        } else {
+            cliShowArgumentRangeError("channel", 0, MAX_AUX_CHANNEL_COUNT - 1);
+        }
+    }
+}
+
 #ifdef USE_TEMPERATURE_SENSOR
 static void printTempSensor(uint8_t dumpMask, const tempSensorConfig_t *tempSensorConfigs, const tempSensorConfig_t *defaultTempSensorConfigs)
 {
@@ -1232,7 +1263,7 @@ static void cliTempSensor(char *cmdline)
                 sensorConfig->alarm_min = alarm_min;
                 sensorConfig->alarm_max = alarm_max;
                 sensorConfig->osdSymbol = osdSymbol;
-                for (uint8_t index; index < TEMPERATURE_LABEL_LEN; ++index) {
+                for (uint8_t index = 0; index < TEMPERATURE_LABEL_LEN; ++index) {
                     sensorConfig->label[index] = toupper(label[index]);
                     if (label[index] == '\0') break;
                 }
@@ -1248,7 +1279,7 @@ static void cliTempSensor(char *cmdline)
 static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, const navWaypoint_t *defaultNavWaypoint)
 {
     cliPrintLinef("#wp %d %svalid", posControl.waypointCount, posControl.waypointListValid ? "" : "in"); //int8_t bool
-    const char *format = "wp %u %u %d %d %d %d %u"; //uint8_t action; int32_t lat; int32_t lon; int32_t alt; int16_t p1; uint8_t flag
+    const char *format = "wp %u %u %d %d %d %d %d %u"; //uint8_t action; int32_t lat; int32_t lon; int32_t alt; int16_t p1; int16_t p2; uint8_t flag
     for (uint8_t i = 0; i < NAV_MAX_WAYPOINTS; i++) {
         bool equalsDefault = false;
         if (defaultNavWaypoint) {
@@ -1257,6 +1288,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
                 && navWaypoint[i].lon == defaultNavWaypoint[i].lon
                 && navWaypoint[i].alt == defaultNavWaypoint[i].alt
                 && navWaypoint[i].p1 == defaultNavWaypoint[i].p1
+                && navWaypoint[i].p2 == defaultNavWaypoint[i].p2
                 && navWaypoint[i].flag == defaultNavWaypoint[i].flag;
             cliDefaultPrintLinef(dumpMask, equalsDefault, format,
                 i,
@@ -1265,6 +1297,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
                 defaultNavWaypoint[i].lon,
                 defaultNavWaypoint[i].alt,
                 defaultNavWaypoint[i].p1,
+                defaultNavWaypoint[i].p2,
                 defaultNavWaypoint[i].flag
             );
         }
@@ -1275,6 +1308,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
             navWaypoint[i].lon,
             navWaypoint[i].alt,
             navWaypoint[i].p1,
+            navWaypoint[i].p2,
             navWaypoint[i].flag
         );
     }
@@ -1306,9 +1340,12 @@ static void cliWaypoints(char *cmdline)
             cliShowParseError();
         }
     } else {
-        int16_t i, p1;
-        uint8_t action, flag;
+        int16_t i;
+        uint8_t action;
         int32_t lat, lon, alt;
+        int16_t p1 = 0;
+        int16_t p2 = 0;
+        uint8_t flag = 0;
         uint8_t validArgumentCount = 0;
         const char *ptr = cmdline;
         i = fastA2I(ptr);
@@ -1340,13 +1377,19 @@ static void cliWaypoints(char *cmdline)
             }
             ptr = nextArg(ptr);
             if (ptr) {
+                p2 = fastA2I(ptr);
+                validArgumentCount++;
+            }
+            ptr = nextArg(ptr);
+            if (ptr) {
                 flag = fastA2I(ptr);
                 validArgumentCount++;
             }
             if (validArgumentCount < 4) {
                 cliShowParseError();
             } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH || action == NAV_WP_ACTION_RELATIVE)
-                    || (p1 < 0) 
+                    || (p1 < 0)
+                    || (p2 < 0)
                     || !(flag == 0 || flag == NAV_WP_FLAG_LAST)
                     || (action == NAV_WP_ACTION_RELATIVE && (lat < 0 || lat * 100 > navConfig()->general.waypoint_safe_distance || lon < 0 || lon > 359))) {
                 cliShowParseError();
@@ -1356,6 +1399,7 @@ static void cliWaypoints(char *cmdline)
                 posControl.waypointList[i].lon = lon;
                 posControl.waypointList[i].alt = alt;
                 posControl.waypointList[i].p1 = p1;
+                posControl.waypointList[i].p2 = p2;
                 posControl.waypointList[i].flag = flag;
             }
         } else {
@@ -1668,12 +1712,13 @@ static void cliServoMix(char *cmdline)
     } else {
         enum {RULE = 0, TARGET, INPUT, RATE, SPEED, CONDITION, ARGS_COUNT};
         char *ptr = strtok_r(cmdline, " ", &saveptr);
+        args[CONDITION] = -1;
         while (ptr != NULL && check < ARGS_COUNT) {
             args[check++] = fastA2I(ptr);
             ptr = strtok_r(NULL, " ", &saveptr);
         }
 
-        if (ptr != NULL || check != ARGS_COUNT) {
+        if (ptr != NULL || (check < ARGS_COUNT - 1)) {
             cliShowParseError();
             return;
         }
@@ -2551,6 +2596,8 @@ static void cliGet(char *cmdline)
     int matchedCommands = 0;
     char name[SETTING_MAX_NAME_LENGTH];
 
+    while(*cmdline == ' ') ++cmdline; // ignore spaces
+
     for (uint32_t i = 0; i < SETTINGS_TABLE_COUNT; i++) {
         val = settingGet(i);
         if (settingNameContains(val, name, cmdline)) {
@@ -2578,6 +2625,8 @@ static void cliSet(char *cmdline)
     const setting_t *val;
     char *eqptr = NULL;
     char name[SETTING_MAX_NAME_LENGTH];
+
+    while(*cmdline == ' ') ++cmdline; // ignore spaces
 
     len = strlen(cmdline);
 
@@ -2798,6 +2847,11 @@ static void cliStatus(char *cmdline)
 #else
     cliPrintLinef("Arming disabled flags: 0x%lx", armingFlags & ARMING_DISABLED_ALL_FLAGS);
 #endif
+
+    // If we are blocked by PWM init - provide more information
+    if (getPwmInitError() != PWM_INIT_ERROR_NONE) {
+        cliPrintLinef("PWM output init error: %s", getPwmInitErrorMessage());
+    }
 }
 
 #ifndef SKIP_TASK_STATISTICS
@@ -3004,6 +3058,9 @@ static void printConfig(const char *cmdline, bool doDiff)
         cliPrintHashLine("adjrange");
         printAdjustmentRange(dumpMask, adjustmentRanges_CopyArray, adjustmentRanges(0));
 
+	cliPrintHashLine("rxaux");
+        printRxAux(dumpMask, rxChannelAuxConfigs_CopyArray, rxChannelAuxConfigs(0));
+	    
         cliPrintHashLine("rxrange");
         printRxRange(dumpMask, rxChannelRangeConfigs_CopyArray, rxChannelRangeConfigs(0));
 
@@ -3159,6 +3216,7 @@ const clicmd_t cmdTable[] = {
 #if !defined(SKIP_TASK_STATISTICS) && !defined(SKIP_CLI_RESOURCES)
     CLI_COMMAND_DEF("resource", "view currently used resources", NULL, cliResource),
 #endif
+    CLI_COMMAND_DEF("rxaux", "configure rx aux failsafe", NULL, cliRxAux),
     CLI_COMMAND_DEF("rxrange", "configure rx channel ranges", NULL, cliRxRange),
     CLI_COMMAND_DEF("save", "save and reboot", NULL, cliSave),
     CLI_COMMAND_DEF("serial", "configure serial ports", NULL, cliSerial),
