@@ -786,7 +786,7 @@ static const char * navigationStateMessage(void)
             // Used by HOLD flight modes. No information to add.
             break;
         case MW_NAV_STATE_HOLD_TIMED:
-            // Not used anymore
+            // Waypoint wait
             break;
         case MW_NAV_STATE_WP_ENROUTE:
             // TODO: Show WP number
@@ -797,7 +797,7 @@ static const char * navigationStateMessage(void)
             // Not used
             break;
         case MW_NAV_STATE_LAND_START:
-            // Not used
+            // RTH wait
             break;
         case MW_NAV_STATE_EMERGENCY_LANDING:
             return OSD_MESSAGE_STR("EMERGENCY LANDING");
