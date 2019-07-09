@@ -199,6 +199,7 @@ A shorter form is also supported to enable and disable functions using `serial <
 |  nav_rth_alt_mode  | AT_LEAST | Configure how the aircraft will manage altitude on the way home, see Navigation modes on wiki for more details |
 |  nav_rth_altitude  | 1000 | Used in EXTRA, FIXED and AT_LEAST rth alt modes [cm] (Default 1000 means 10 meters) |
 |  nav_rth_home_altitude  | 0 | Aircraft will climb/descend to this altitude after reaching home if landing is not enabled. Set to 0 to stay at `nav_rth_altitude` (default) [cm] |
+|  nav_rth_home_wait  | 0 | Aircraft will wait after reaching home and at this same time climb/descend to nav_rth_home_altitude (if enabled) and then landing (if enabled). Set to 0 to disabled (default) [s] |
 |  nav_rth_abort_threshold  | 50000 | RTH sanity checking feature will notice if distance to home is increasing during RTH and once amount of increase exceeds the threshold defined by this parameter, instead of continuing RTH machine will enter emergency landing, self-level and go down safely. Default is 500m which is safe enough for both multirotor machines and airplanes. [cm] |
 |  nav_mc_bank_angle  | 30 | Maximum banking angle (deg) that multicopter navigation is allowed to set. Machine must be able to satisfy this angle without loosing altitude |
 |  nav_mc_hover_thr  | 1500 | Multicopter hover throttle hint for altitude controller. Should be set to approximate throttle value when drone is hovering. |
@@ -411,6 +412,7 @@ A shorter form is also supported to enable and disable functions using `serial <
 | fw_p_level | 20 | Fixed-wing attitude stabilisation P-gain                      |
 | fw_i_level | 5 | Fixed-wing attitude stabilisation low-pass filter cutoff      |
 | fw_d_level | 75 | Fixed-wing attitude stabilisation HORIZON transition point    |
+|  nav_land_direction  | 0 | Predefined landing direction in deg (1-360), 0-not use, <0-can change by homeReset |
 |  max_angle_inclination_rll  | 300 | Maximum inclination in level (angle) mode (ROLL axis). 100=10° |
 |  max_angle_inclination_pit  | 300 | Maximum inclination in level (angle) mode (PITCH axis). 100=10° |
 |  fw_iterm_limit_stick_position  | 0.5 | Iterm is not allowed to grow when stick position is above threshold. This solves the problem of bounceback or followthrough when full stick deflection is applied on poorely tuned fixed wings. In other words, stabilization is partialy disabled when pilot is actively controlling the aircraft and active when sticks are not touched. `0` mean stick is in center position, `1` means it is fully deflected to either side |

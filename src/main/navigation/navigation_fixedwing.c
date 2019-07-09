@@ -270,7 +270,7 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
     // If angular visibility of a waypoint is less than 30deg, don't calculate circular loiter, go straight to the target
     #define TAN_15DEG    0.26795f
     float loiterRadiusTan = (navConfig()->fw.loiter_radius / TAN_15DEG);
-    bool needToCalculateCircularLoiter = isApproachingLastWaypoint()
+    bool needToCalculateCircularLoiter = (isApproachingLastWaypoint() || isWaypointWait())
                                             && (distanceToActualTarget <= loiterRadiusTan)
                                             && (distanceToActualTarget > 50.0f)
                                             && !FLIGHT_MODE(NAV_CRUISE_MODE);
