@@ -71,6 +71,7 @@ LINKER_DIR      := $(ROOT)/src/main/target/link
 
 # default xtal value for F4 targets
 HSE_VALUE       = 8000000
+MHZ_VALUE      ?=
 
 # used for turning on features like VCP and SDCARD
 FEATURES        =
@@ -119,10 +120,13 @@ $(error Unknown target MCU specified.)
 endif
 
 GROUP_1_TARGETS := ALIENFLIGHTF3 ALIENFLIGHTF4 AIRHEROF3 AIRHEROF3_QUAD COLIBRI_RACE LUX_RACE SPARKY REVO SPARKY2 COLIBRI KISSFC FALCORE FF_F35_LIGHTNING FF_FORTINIF4 FF_PIKOF4 FF_PIKOF4OSD
-GROUP_2_TARGETS := SPRACINGF3 SPRACINGF3EVO SPRACINGF3EVO_1SS SPRACINGF3MINI SPRACINGF4EVO CLRACINGF4AIR CLRACINGF4AIRV2 BEEROTORF4 BETAFLIGHTF3 BETAFLIGHTF4 PIKOBLX SPRACINGF3NEO
-GROUP_3_TARGETS := OMNIBUS AIRBOTF4 BLUEJAYF4 OMNIBUSF4 OMNIBUSF4PRO OMNIBUSF4V3 FIREWORKSV2 SPARKY2 MATEKF405 OMNIBUSF7 DYSF4PRO OMNIBUSF4PRO_LEDSTRIPM5 OMNIBUSF7NXT OMNIBUSF7V2 ASGARD32F4
-GROUP_4_TARGETS := ANYFC ANYFCF7 ANYFCF7_EXTERNAL_BARO ANYFCM7 ALIENFLIGHTNGF7 PIXRACER YUPIF4 YUPIF4MINI YUPIF4R2 YUPIF7 MATEKF405SE MATEKF411 MATEKF722 MATEKF405OSD MATEKF405_SERVOS6
-GROUP_OTHER_TARGETS := $(filter-out $(GROUP_1_TARGETS) $(GROUP_2_TARGETS) $(GROUP_3_TARGETS) $(GROUP_4_TARGETS), $(VALID_TARGETS))
+GROUP_2_TARGETS := SPRACINGF3 SPRACINGF3EVO SPRACINGF3EVO_1SS SPRACINGF3MINI SPRACINGF4EVO CLRACINGF4AIR CLRACINGF4AIRV2 BEEROTORF4 BETAFLIGHTF3 BETAFLIGHTF4 PIKOBLX
+GROUP_3_TARGETS := OMNIBUS AIRBOTF4 BLUEJAYF4 OMNIBUSF4 OMNIBUSF4PRO FIREWORKSV2 SPARKY2 MATEKF405 OMNIBUSF7 DYSF4PRO OMNIBUSF4PRO_LEDSTRIPM5 OMNIBUSF7NXT OMNIBUSF7V2 ASGARD32F4
+GROUP_4_TARGETS := ANYFC ANYFCF7 ANYFCF7_EXTERNAL_BARO ANYFCM7 ALIENFLIGHTNGF7 PIXRACER YUPIF4 YUPIF4MINI YUPIF4R2 YUPIF7 MATEKF405SE MATEKF411 MATEKF722 MATEKF405OSD MATEKF405_SERVOS6 NOX
+GROUP_5_TARGETS := ASGARD32F7 CHEBUZZF3 CLRACINGF4AIRV3 DALRCF405 DALRCF722DUAL DYSF4PROV2 F4BY FISHDRONEF4 FOXEERF405 FOXEERF722DUAL FRSKYF3 FRSKYF4 FURYF3 FURYF3_SPIFLASH FURYF4OSD
+GROUP_6_TARGETS := MAMBAF405 OMNIBUSF4V3 OMNIBUSF4V3_S6_SS OMNIBUSF4V3_S5S6_SS OMNIBUSF4V3_S5_S6_2SS
+GROUP_7_TARGETS := KAKUTEF4 KAKUTEF4V2 KAKUTEF7 KAKUTEF7MINI KFC32F3_INAV KROOZX MATEKF411_RSSI MATEKF411_SFTSRL2 MATEKF722MINI MATEKF722SE MATEKF722_HEXSERVO
+GROUP_OTHER_TARGETS := $(filter-out $(GROUP_1_TARGETS) $(GROUP_2_TARGETS) $(GROUP_3_TARGETS) $(GROUP_4_TARGETS) $(GROUP_5_TARGETS) $(GROUP_6_TARGETS) $(GROUP_7_TARGETS), $(VALID_TARGETS))
 
 REVISION = $(shell git rev-parse --short HEAD)
 
@@ -163,6 +167,10 @@ TARGET_FLAGS    := $(TARGET_FLAGS) -D$(TARGET_MCU) -D$(TARGET)
 
 ifneq ($(HSE_VALUE),)
 DEVICE_FLAGS    := $(DEVICE_FLAGS) -DHSE_VALUE=$(HSE_VALUE)
+endif
+
+ifneq ($(MHZ_VALUE),)
+DEVICE_FLAGS    := $(DEVICE_FLAGS) -DMHZ_VALUE=$(MHZ_VALUE)
 endif
 
 ifneq ($(BASE_TARGET), $(TARGET))
@@ -221,6 +229,7 @@ CFLAGS      += $(ARCH_FLAGS) \
               $(DEBUG_FLAGS) \
               -std=gnu99 \
               -Wall -Wextra -Wunsafe-loop-optimizations -Wdouble-promotion \
+              -Wstrict-prototypes \
               -Werror=switch \
               -ffunction-sections \
               -fdata-sections \
@@ -323,6 +332,12 @@ settings-json:
 clean-settings:
 	$(V1) $(RM) $(GENERATED_SETTINGS)
 
+# CFLAGS used for ASM generation. These can't include the LTO related options
+# since they prevent proper ASM generation. Since $(LTO_FLAGS) includes the
+# optization level, we have to add it back. -g is required to make interleaved
+# source/ASM work.
+ASM_CFLAGS=-g $(OPTIMZE) $(filter-out $(LTO_FLAGS) -save-temps=obj, $(CFLAGS))
+
 # List of buildable ELF files and their object dependencies.
 # It would be nice to compute these lists, but that seems to be just beyond make.
 
@@ -342,6 +357,10 @@ $(TARGET_OBJ_DIR)/%.o: %.c
 	$(V1) mkdir -p $(dir $@)
 	$(V1) echo %% $(notdir $<) "$(STDOUT)"
 	$(V1) $(CROSS_CC) -c -o $@ $(CFLAGS) $<
+ifeq ($(GENERATE_ASM), 1)
+	$(V1) $(CROSS_CC) -S -fverbose-asm -Wa,-aslh -o $(patsubst %.o,%.txt.S,$@) -g $(ASM_CFLAGS) $<
+endif
+
 
 # Assemble
 $(TARGET_OBJ_DIR)/%.o: %.s
@@ -367,8 +386,17 @@ targets-group-2: $(GROUP_2_TARGETS)
 ## targets-group-3   : build some targets
 targets-group-3: $(GROUP_3_TARGETS)
 
-## targets-group-3   : build some targets
+## targets-group-4   : build some targets
 targets-group-4: $(GROUP_4_TARGETS)
+
+## targets-group-5   : build some targets
+targets-group-5: $(GROUP_5_TARGETS)
+
+## targets-group-6   : build some targets
+targets-group-6: $(GROUP_6_TARGETS)
+
+## targets-group-7   : build some targets
+targets-group-7: $(GROUP_7_TARGETS)
 
 ## targets-group-rest: build the rest of the targets (not listed in group 1, 2 or 3)
 targets-group-rest: $(GROUP_OTHER_TARGETS)
@@ -461,6 +489,9 @@ targets:
 	$(V0) @echo "targets-group-2:    $(GROUP_2_TARGETS)"
 	$(V0) @echo "targets-group-3:    $(GROUP_3_TARGETS)"
 	$(V0) @echo "targets-group-4:    $(GROUP_4_TARGETS)"
+	$(V0) @echo "targets-group-5:    $(GROUP_5_TARGETS)"
+	$(V0) @echo "targets-group-6:    $(GROUP_6_TARGETS)"
+	$(V0) @echo "targets-group-7:    $(GROUP_7_TARGETS)"
 	$(V0) @echo "targets-group-rest: $(GROUP_OTHER_TARGETS)"
 	$(V0) @echo "Release targets:    $(RELEASE_TARGETS)"
 

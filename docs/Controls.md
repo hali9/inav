@@ -23,8 +23,6 @@ The stick positions are combined to activate different functions:
 
 | Function                      | Throttle | Yaw     | Pitch  | Roll   |
 | ----------------------------- | -------- | ------- | ------ | ------ |
-| ARM                           | LOW      | HIGH    | CENTER | CENTER |
-| DISARM                        | LOW      | LOW     | CENTER | CENTER |
 | Profile 1                     | LOW      | LOW     | CENTER | LOW    |
 | Profile 2                     | LOW      | LOW     | HIGH   | CENTER |
 | Profile 3                     | LOW      | LOW     | CENTER | HIGH   |
@@ -41,6 +39,7 @@ The stick positions are combined to activate different functions:
 | Save current waypoint mission | LOW      | CENTER  | HIGH   | LOW    |
 | Load current waypoint mission | LOW      | CENTER  | HIGH   | HIGH   |
 | Save setting                  | LOW      | LOW     | LOW    | HIGH   |
+| Enter OSD Menu (CMS)          | CENTER   | LOW     | HIGH   | CENTER |
 
 ![Stick Positions](assets/images/StickPositions.png)
 
