@@ -29,15 +29,13 @@
 #include "common/utils.h"
 
 #include "drivers/bus.h"
-#include "drivers/light_led.h"
-#include "drivers/io.h"
-#include "drivers/time.h"
-#include "drivers/nvic.h"
 #include "drivers/dma.h"
-#include "drivers/vcd.h"
+#include "drivers/io.h"
+#include "drivers/light_led.h"
+#include "drivers/nvic.h"
+#include "drivers/time.h"
 
 #include "max7456.h"
-#include "max7456_symbols.h"
 
 // VM0 bits
 #define VIDEO_BUFFER_DISABLE        0x01
@@ -290,7 +288,7 @@ uint16_t max7456GetScreenSize(void)
     // deal with a zero returned from here.
     // TODO: Inspect all callers, make sure they can handle zero and
     // change this function to return zero before initialization.
-    if (state.isInitialized && (state.registers.vm0 & VIDEO_LINES_NTSC)) {
+    if (state.isInitialized && ((state.registers.vm0 & VIDEO_MODE_PAL) == 0)) {
         return VIDEO_BUFFER_CHARS_NTSC;
     }
     return VIDEO_BUFFER_CHARS_PAL;
@@ -315,7 +313,7 @@ uint8_t max7456GetRowsCount(void)
 static void max7456ReInit(void)
 {
     uint8_t buf[2 * 2];
-    int bufPtr;
+    int bufPtr = 0;
     uint8_t statVal;
 
 
@@ -335,10 +333,13 @@ static void max7456ReInit(void)
             break;
         default:
             busRead(state.dev, MAX7456ADD_STAT, &statVal);
-            if (VIN_IS_PAL(statVal) || millis() > MAX_SYNC_WAIT_MS) {
+            if (VIN_IS_PAL(statVal)) {
                 vm0Mode = VIDEO_MODE_PAL;
             } else if (VIN_IS_NTSC_alt(statVal)) {
                 vm0Mode = VIDEO_MODE_NTSC;
+            } else if ( millis() > MAX_SYNC_WAIT_MS) {
+                // Detection timed out, default to PAL
+                vm0Mode = VIDEO_MODE_PAL;
             } else {
                 // No signal detected yet, wait for detection timeout
                 return;
@@ -634,7 +635,7 @@ void max7456RefreshAll(void)
     }
 }
 
-void max7456ReadNvm(uint16_t char_address, max7456Character_t *chr)
+void max7456ReadNvm(uint16_t char_address, osdCharacter_t *chr)
 {
     // Check if device is available
     if (state.dev == NULL) {
@@ -657,7 +658,7 @@ void max7456ReadNvm(uint16_t char_address, max7456Character_t *chr)
 
     max7456WaitUntilNoBusy();
 
-    for (unsigned ii = 0; ii < sizeof(chr->data); ii++) {
+    for (unsigned ii = 0; ii < OSD_CHAR_VISIBLE_BYTES; ii++) {
         busWrite(state.dev, MAX7456ADD_CMAL, ii);
         busRead(state.dev, MAX7456ADD_CMDO, &chr->data[ii]);
     }
@@ -666,7 +667,7 @@ void max7456ReadNvm(uint16_t char_address, max7456Character_t *chr)
     max7456Unlock();
 }
 
-void max7456WriteNvm(uint16_t char_address, const max7456Character_t *chr)
+void max7456WriteNvm(uint16_t char_address, const osdCharacter_t *chr)
 {
     uint8_t spiBuff[(sizeof(chr->data) * 2 + 2) * 2];
     int bufPtr = 0;
@@ -698,7 +699,7 @@ void max7456WriteNvm(uint16_t char_address, const max7456Character_t *chr)
         or_val = addr_h << 6;
     }
 
-    for (unsigned x = 0; x < sizeof(chr->data); x++) {
+    for (unsigned x = 0; x < OSD_CHAR_VISIBLE_BYTES; x++) {
         bufPtr = max7456PrepareBuffer(spiBuff, bufPtr, MAX7456ADD_CMAL, x | or_val); //set start address low
         bufPtr = max7456PrepareBuffer(spiBuff, bufPtr, MAX7456ADD_CMDI, chr->data[x]);
     }
