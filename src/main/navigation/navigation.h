@@ -107,11 +107,11 @@ typedef enum {
 } navArmingBlocker_e;
 
 typedef enum {
-    NAV_RTH_APROACH_LANDING_ABOVE_MAXALT = 0, // 0-alt>maxalt
-    NAV_RTH_APROACH_LANDING_MAXALT = 1,       // 1-alt=maxalt angle<>homeYaw+135
-    NAV_RTH_APROACH_LANDING_HOMEYAW135 = 2,   // 2-alt=maxalt angle=homeYaw+135
-    NAV_RTH_APROACH_LANDING_MINALT = 3,       // 3-alt=minalt angle<>homeYaw
-    NAV_RTH_APROACH_LANDING_HOMEYAW = 4,      // 4-alt=minalt angle=homeYaw
+    NAV_RTH_APROACH_LANDING_ABOVE_MAXALT = 0, // 0-alt>maxAlt
+    NAV_RTH_APROACH_LANDING_MAXALT = 1,       // 1-alt=maxAlt, angle<>(homeYaw+angle in decision point)
+    NAV_RTH_APROACH_LANDING_DECISION = 2,     // 2-alt=maxAlt, angle=(homeYaw+angle in decision point)
+    NAV_RTH_APROACH_LANDING_SAFEALT = 3,      // 3-alt=safeAlt, angle<>homeYaw
+    NAV_RTH_APROACH_LANDING_HOMEYAW = 4,      // 4-alt=safeAlt, angle=homeYaw
     NAV_RTH_APROACH_LANDING_FINAL = 5,        // 5-final aproach
 } navRTHAproachLanding_e;
 
