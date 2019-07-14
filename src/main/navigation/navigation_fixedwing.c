@@ -105,7 +105,7 @@ bool adjustFixedWingAltitudeFromRCInput(void)
     }
 }
 
-static void calculateLoiter(loiter *loiter_t, float angle, float dist, float posX, float posY) {
+static void calculateLoiter(loiter_t *loiter, float angle, float dist, float posX, float posY) {
     loiter->posX = posControl.desiredState.pos.x + posX + dist * cos_approx(angle);
     loiter->posY = posControl.desiredState.pos.y + posY + dist * sin_approx(angle);
     loiter->errorX = loiter->posX - navGetCurrentActualPositionAndVelocity()->pos.x;
@@ -318,7 +318,7 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
 
                     float aproach = MIN(loiter.distance - (M_PIf * navConfig()->fw.loiter_radius / 4), 2 * loiterRadiusTan);
                     calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS((posControl.rthState.homePosition.yaw + DEGREES_TO_CENTIDEGREES(180)) % DEGREES_TO_CENTIDEGREES(360)),
-                        aproach, loiter.fposX, loiter.posY);
+                        aproach, loiter.posX, loiter.posY);
                 }                
             }
         }
