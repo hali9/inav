@@ -517,7 +517,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
         sbufWriteU16(dst, attitude.values.roll);
         sbufWriteU16(dst, attitude.values.pitch);
 		if (IS_RC_MODE_ACTIVE(BOXHOMERESET)) {
-          sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.homePosition.yaw));
+          sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.rthState.homePosition.yaw));
           //sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.homeWaypointAbove.yaw));
           //int32_t     yaw;             // deg * 100		  
         } else {
