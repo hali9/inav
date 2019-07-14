@@ -70,13 +70,13 @@ typedef struct FixedWingLaunchState_s {
     bool motorControlAllowed;
 } FixedWingLaunchState_t;
 
-static FixedWingLaunchState_t   launchState;
+static EXTENDED_FASTRAM FixedWingLaunchState_t   launchState;
 
 #define COS_MAX_LAUNCH_ANGLE                0.70710678f                 // cos(45), just to be safe
 #define SWING_LAUNCH_MIN_ROTATION_RATE      DEGREES_TO_RADIANS(100)     // expect minimum 100dps rotation rate
 static void updateFixedWingLaunchDetector(timeUs_t currentTimeUs)
 {
-    const float swingVelocity = (ABS(imuMeasuredRotationBF.z) > SWING_LAUNCH_MIN_ROTATION_RATE) ? (imuMeasuredAccelBF.y / imuMeasuredRotationBF.z) : 0;
+    const float swingVelocity = (fabsf(imuMeasuredRotationBF.z) > SWING_LAUNCH_MIN_ROTATION_RATE) ? (imuMeasuredAccelBF.y / imuMeasuredRotationBF.z) : 0;
     const bool isForwardAccelerationHigh = (imuMeasuredAccelBF.x > navConfig()->fw.launch_accel_thresh);
     const bool isAircraftAlmostLevel = (calculateCosTiltAngle() >= cos_approx(DEGREES_TO_RADIANS(navConfig()->fw.launch_max_angle)));
 
@@ -106,7 +106,7 @@ void resetFixedWingLaunchController(timeUs_t currentTimeUs)
     launchState.motorControlAllowed = false;
 }
 
-bool isFixedWingLaunchDetected(void)
+bool FAST_CODE isFixedWingLaunchDetected(void)
 {
     return launchState.launchDetected;
 }
@@ -117,7 +117,7 @@ void enableFixedWingLaunchController(timeUs_t currentTimeUs)
     launchState.motorControlAllowed = true;
 }
 
-bool isFixedWingLaunchFinishedOrAborted(void)
+bool FAST_CODE isFixedWingLaunchFinishedOrAborted(void)
 {
     return launchState.launchFinished;
 }
