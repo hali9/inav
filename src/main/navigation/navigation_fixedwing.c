@@ -305,7 +305,7 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
                 }
                 if ((loiter.distance <= (distanceAproach)) &&
                     (virtualAproach == NAV_RTH_APROACH_LANDING_HOMEYAW)) {
-                    virtualAproach = MAX(virtualAproach, NAV_RTH_APROACH_LANDING_FINAL);
+                    virtualAproach = MAX(virtualAproach, NAV_RTH_APROACH_LANDING_RESET);
                 }
                 if (virtualAproach == NAV_RTH_APROACH_LANDING_DECISION || virtualAproach == NAV_RTH_APROACH_LANDING_SAFEALT) {
                     calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS(posControl.rthState.homePosition.yaw + angle), distanceAproach , 0, 0);
