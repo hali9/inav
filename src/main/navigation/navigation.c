@@ -80,7 +80,7 @@ radar_pois_t radar_pois[RADAR_MAX_POIS];
 PG_REGISTER_ARRAY(navWaypoint_t, NAV_MAX_WAYPOINTS, nonVolatileWaypointList, PG_WAYPOINT_MISSION_STORAGE, 0);
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(navConfig_t, navConfig, PG_NAV_CONFIG, 4);
+PG_REGISTER_WITH_RESET_TEMPLATE(navConfig_t, navConfig, PG_NAV_CONFIG, 5);
 
 PG_RESET_TEMPLATE(navConfig_t, navConfig,
     .general = {
@@ -148,6 +148,10 @@ PG_RESET_TEMPLATE(navConfig_t, navConfig,
 
         //Fixed wing landing
         .land_dive_angle = 2,                   // 2 degrees dive by default
+        .land_safe_alt = 1500,                  // 15m to safe flying
+        .land_motor_off_alt = 500,              // 5m when motor cut off
+        .land_aproach_distance = 7500,          // 75m for aproach
+        .land_distance = 7500,                  // 75m for land
 
         // Fixed wing launch
         .launch_velocity_thresh = 300,          // 3 m/s
@@ -3344,7 +3348,10 @@ bool navigationRTHAllowsLanding(void)
 {
     navRTHAllowLanding_e allow = navConfig()->general.flags.rth_allow_landing;
     return allow == NAV_RTH_ALLOW_LANDING_ALWAYS ||
-        (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE));
+           allow == NAV_RTH_ALLOW_LANDING_APROACH ||
+          (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE)) ||
+          (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY_APR && FLIGHT_MODE(FAILSAFE_MODE)) ||
+           allow == NAV_RTH_ALLOW_LANDING_FS_NO_APR;
 }
 
 bool FAST_CODE isNavLaunchEnabled(void)
