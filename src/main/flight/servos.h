@@ -20,7 +20,7 @@
 #include "config/parameter_group.h"
 #include "common/logic_condition.h"
 
-#define MAX_SUPPORTED_SERVOS 8
+#define MAX_SUPPORTED_SERVOS 16
 
 // These must be consecutive
 typedef enum {
@@ -149,3 +149,4 @@ void loadCustomServoMixer(void);
 void servoMixer(float dT);
 void servoComputeScalingFactors(uint8_t servoIndex);
 void servosInit(void);
+int getServoCount(void);

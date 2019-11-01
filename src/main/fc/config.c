@@ -38,6 +38,7 @@
 
 #include "drivers/system.h"
 #include "drivers/rx_spi.h"
+#include "drivers/pwm_mapping.h"
 #include "drivers/pwm_output.h"
 #include "drivers/serial.h"
 #include "drivers/timer.h"
@@ -106,7 +107,7 @@ PG_RESET_TEMPLATE(featureConfig_t, featureConfig,
     .enabledFeatures = DEFAULT_FEATURES | COMMON_DEFAULT_FEATURES
 );
 
-PG_REGISTER_WITH_RESET_TEMPLATE(systemConfig_t, systemConfig, PG_SYSTEM_CONFIG, 2);
+PG_REGISTER_WITH_RESET_TEMPLATE(systemConfig_t, systemConfig, PG_SYSTEM_CONFIG, 3);
 
 PG_RESET_TEMPLATE(systemConfig_t, systemConfig,
     .current_profile_index = 0,
@@ -115,7 +116,6 @@ PG_RESET_TEMPLATE(systemConfig_t, systemConfig,
     .i2c_speed = I2C_SPEED_400KHZ,
     .cpuUnderclock = 0,
     .throttle_tilt_compensation_strength = 0,      // 0-100, 0 - disabled
-    .pwmRxInputFilteringMode = INPUT_FILTERING_DISABLED,
     .name = { 0 }
 );
 
@@ -190,7 +190,7 @@ void validateAndFixConfig(void)
 #endif
 
     // Disable unused features
-    featureClear(FEATURE_UNUSED_3 | FEATURE_UNUSED_4 | FEATURE_UNUSED_5 | FEATURE_UNUSED_6 | FEATURE_UNUSED_7 | FEATURE_UNUSED_8 | FEATURE_UNUSED_9 );
+    featureClear(FEATURE_UNUSED_3 | FEATURE_UNUSED_4 | FEATURE_UNUSED_5 | FEATURE_UNUSED_6 | FEATURE_UNUSED_7 | FEATURE_UNUSED_8 | FEATURE_UNUSED_9 | FEATURE_UNUSED_10);
 
 #if defined(DISABLE_RX_PWM_FEATURE) || !defined(USE_RX_PWM)
     if (rxConfig()->receiverType == RX_TYPE_PWM) {

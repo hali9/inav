@@ -146,7 +146,7 @@ A shorter form is also supported to enable and disable functions using `serial <
 |  3d_deadband_throttle  | 50 | Throttle signal will be held to a fixed value when throttle is centered with an error margin defined in this parameter. |
 |  motor_pwm_rate  | 400 | Output frequency (in Hz) for motor pins. Default is 400Hz for motor with motor_pwm_protocol set to STANDARD. For *SHOT (e.g. ONESHOT125) values of 1000 and 2000 have been tested by the development team and are supported. It may be possible to use higher values. For BRUSHED values of 8000 and above should be used. Setting to 8000 will use brushed mode at 8kHz switching frequency. Up to 32kHz is supported for brushed. Default is 16000 for boards with brushed motors. Note, that in brushed mode, minthrottle is offset to zero. For brushed mode, set max_throttle to 2000. |
 |  motor_pwm_protocol  | STANDARD | Protocol that is used to send motor updates to ESCs. Possible values - STANDARD, ONESHOT125, ONESHOT42, MULTISHOT, DSHOT150, DSHOT300, DSHOT600, DSHOT1200, BRUSHED |
-|  fixed_wing_auto_arm  | OFF | Auto-arm fixed wing aircraft on throttle above min_throttle, and disarming with stick commands are disabled, so power cycle is required to disarm. Requires enabled motorstop and no arm switch configured. |
+|  fixed_wing_auto_arm  | OFF | Auto-arm fixed wing aircraft on throttle above min_check, and disarming with stick commands are disabled, so power cycle is required to disarm. Requires enabled motorstop and no arm switch configured. |
 |  disarm_kill_switch  | ON | Disarms the motors independently of throttle value. Setting to OFF reverts to the old behaviour of disarming only when the throttle is low. Only applies when arming and disarming with an AUX channel. |
 |  switch_disarm_delay | 250 | Delay before disarming when requested by switch (ms) [0-1000] |
 |  small_angle  | 25 | If the aircraft tilt angle exceed this value the copter will refuse to arm.  |
@@ -178,11 +178,11 @@ A shorter form is also supported to enable and disable functions using `serial <
 |  nav_disarm_on_landing  | OFF | If set to ON, iNav disarms the FC after landing |
 |  nav_use_midthr_for_althold  | OFF | If set to OFF, the FC remembers your throttle stick position when enabling ALTHOLD and treats it as a neutral midpoint for holding altitude |
 |  nav_extra_arming_safety  | ON | If set to ON drone won't arm if no GPS fix and any navigation mode like RTH or POSHOLD is configured. ALLOW_BYPASS allows the user to momentarily disable this check by holding yaw high (left stick held at the bottom right in mode 2) when switch arming is used |
-|  nav_user_control_mode  | ATTI | Defines how Pitch/Roll input from RC receiver affects flight in POSHOLD mode: ATTI - right stick controls attitude like in ANGLE mode; CRUISE - right stick controls velocity in forward and right direction. |
+|  nav_user_control_mode  | ATTI | Defines how Pitch/Roll input from RC receiver affects flight in POSHOLD mode: ATTI - pitch/roll controls attitude like in ANGLE mode; CRUISE - pitch/roll controls velocity in forward and right direction. |
 |  nav_position_timeout  | 5 | If GPS fails wait for this much seconds before switching to emergency landing mode (0 - disable) |
 |  nav_wp_radius  | 100 | Waypoint radius [cm]. Waypoint would be considered reached if machine is within this radius |
 |  nav_wp_safe_distance  | 10000 | First waypoint in the mission should be closer than this value [cm] |
-|  nav_auto_speed  | 300 | Maximum velocity firmware is allowed in full auto modes (POSHOLD, RTH, WP) [cm/s] [Multirotor only] |
+|  nav_auto_speed  | 300 | Maximum velocity firmware is allowed in full auto modes (RTH, WP) [cm/s] [Multirotor only] |
 |  nav_auto_climb_rate  | 500 | Maximum climb/descent rate that UAV is allowed to reach during navigation modes. [cm/s] |
 |  nav_manual_speed  | 500 | Maximum velocity firmware is allowed when processing pilot input for POSHOLD/CRUISE control mode [cm/s] [Multirotor only] |
 |  nav_manual_climb_rate  | 200 | Maximum climb/descent rate firmware is allowed when processing pilot input for ALTHOLD control mode [cm/s] |
@@ -227,6 +227,10 @@ A shorter form is also supported to enable and disable functions using `serial <
 |  nav_fw_launch_min_time | 0 | Allow launch mode to execute at least this time (ms) and ignore stick movements [0-60000]. |
 |  nav_fw_launch_max_altitude | 0 | Altitude (centimeters) at which LAUNCH mode will be turned off and regular flight mode will take over [0-60000]. |
 |  nav_fw_land_dive_angle  | 2 | Dive angle that airplane will use during final landing phase. During dive phase, motor is stopped or IDLE and roll control is locked to 0 degrees |
+|  nav_fw_land_safe_alt  | 1500 | When landing with aproach is enabled, height from which the last approach is made. [cm] |
+|  nav_fw_land_motor_off_alt  | 500 | When landing is enabled, height of engine shutdown or idle. [cm] |
+|  nav_fw_land_aproach_distance  | 7500 | When landing with aproach is enabled, distance of final aproach to home point. [cm] |
+|  nav_fw_land_distance  | 7500 | When landing with aproach is enabled, distance from home point to touch down. [cm] |
 |  nav_fw_cruise_yaw_rate  | 20 | Max YAW rate when NAV CRUISE mode is enabled (0=disable control via yaw stick) [dps]|
 |  serialrx_provider  | SPEK1024 | When feature SERIALRX is enabled, this allows connection to several receivers which output data via digital interface resembling serial. See RX section. |
 |  serialrx_halfduplex  | OFF | Allow serial receiver to operate on UART TX pin. With some receivers will allow control and telemetry over a single wire |
@@ -241,7 +245,7 @@ A shorter form is also supported to enable and disable functions using `serial <
 |  frsky_vfas_precision  | 0 | D-Series telemetry only: Set to 1 to send raw VBat value in 0.1V resolution for receivers that can handle it, or 0 (default) to use the standard method |
 |  frsky_pitch_roll  | OFF | S.Port and D-Series telemetry: Send pitch and roll degrees*10 instead of raw accelerometer data |
 |  smartport_fuel_unit  | MAH | S.Port telemetry only: Unit of the value sent with the `FUEL` ID (FrSky D-Series always sends precent). [PERCENT/MAH/MWH] |
-|  smartport_uart_unidir  | OFF | S.Port telemetry only: Turn UART into UNIDIR for usage on F1 and F4 target. See Telemetry.md for details |
+|  telemetry_uart_unidir  | OFF | S.Port telemetry only: Turn UART into UNIDIR for usage on F1 and F4 target. See Telemetry.md for details |
 |  report_cell_voltage  | OFF | S.Port, D-Series, and IBUS telemetry: Send the average cell voltage if set to ON |
 |  hott_alarm_sound_interval  | 5 | Battery alarm delay in seconds for Hott telemetry |
 |  smartport_fuel_unit  | MAH | S.Port and D-Series telemetry: Unit of the value sent with the `FUEL` ID. [PERCENT/MAH/MWH] |
@@ -282,6 +286,8 @@ A shorter form is also supported to enable and disable functions using `serial <
 |  imu_dcm_ki  | 50 | Inertial Measurement Unit KI Gain for accelerometer measurements |
 |  imu_dcm_kp_mag  | 10000 | Inertial Measurement Unit KP Gain for compass measurements |
 |  imu_dcm_ki_mag  | 0 | Inertial Measurement Unit KI Gain for compass measurements |
+|  imu_acc_ignore_rate  | 0 | Total gyro rotation rate threshold [deg/s] to consider accelerometer trustworthy on airplanes |
+|  imu_acc_ignore_slope | 0 | Half-width of the interval to gradually reduce accelerometer weight. Centered at `imu_acc_ignore_rate` (exactly 50% weight) |
 |  pos_hold_deadband  | 20 | Stick deadband in [r/c points], applied after r/c deadband and expo |
 |  alt_hold_deadband  | 50 | Defines the deadband of throttle during alt_hold [r/c points] |
 |  yaw_motor_direction  | 1 | Use if you need to inverse yaw motor direction. |
@@ -305,6 +311,7 @@ A shorter form is also supported to enable and disable functions using `serial <
 |  failsafe_lights | ON | Enable or disable the lights when the `FAILSAFE` flight mode is enabled. The target needs to be compiled with `USE_LIGHTS` [ON/OFF]. |
 |  failsafe_lights_flash_period | 1000 | Time in milliseconds between two flashes when `failsafe_lights` is ON and `FAILSAFE` flight mode is enabled [40-65535]. |
 |  failsafe_lights_flash_on_time | 100 | Flash lights ON time in milliseconds when `failsafe_lights` is ON and `FAILSAFE` flight mode is enabled. [20-65535]. |
+|  failsafe_mission | ON | If set to `OFF` the failsafe procedure won't be triggered and the mission will continue if the FC is in WP (automatic mission) mode |
 |  rx_min_usec  | 885 | Defines the shortest pulse width value used when ensuring the channel value is valid. If the receiver gives a pulse value lower than this value then the channel will be marked as bad and will default to the value of mid_rc. |
 |  rx_max_usec  | 2115 | Defines the longest pulse width value used when ensuring the channel value is valid. If the receiver gives a pulse value higher than this value then the channel will be marked as bad and will default to the value of mid_rc. |
 |  rx_nosignal_throttle  | HOLD | Defines behavior of throttle channel after signal loss is detected and until `failsafe_procedure` kicks in. Possible values - `HOLD` and `DROP`. |
@@ -336,6 +343,7 @@ A shorter form is also supported to enable and disable functions using `serial <
 |  osd_imu_temp_alarm_max | 600 | Temperature above which the IMU temperature OSD element will start blinking (decidegrees centigrade) |
 |  osd_baro_temp_alarm_min | -200 | Temperature under which the baro temperature OSD element will start blinking (decidegrees centigrade) |
 |  osd_baro_temp_alarm_max | 600 | Temperature above which the baro temperature OSD element will start blinking (decidegrees centigrade) |
+|  osd_current_alarm | 0 | Value above which the OSD current consumption element will start blinking. Measured in full Amperes. |
 |  osd_estimations_wind_compensation  | ON | Use wind estimation for remaining flight time/distance estimation |
 |  osd_failsafe_switch_layout  | OFF | If enabled the OSD automatically switches to the first layout during failsafe |
 |  osd_temp_label_align | LEFT | Allows to chose between left and right alignment for the OSD temperature sensor labels. Valid values are `LEFT` and `RIGHT` |
@@ -404,6 +412,7 @@ A shorter form is also supported to enable and disable functions using `serial <
 | fw_p_level | 20 | Fixed-wing attitude stabilisation P-gain                      |
 | fw_i_level | 5 | Fixed-wing attitude stabilisation low-pass filter cutoff      |
 | fw_d_level | 75 | Fixed-wing attitude stabilisation HORIZON transition point    |
+|  nav_land_direction  | 0 | Predefined landing direction in deg (1-360), 0-not use, <0-can change by homeReset |
 |  max_angle_inclination_rll  | 300 | Maximum inclination in level (angle) mode (ROLL axis). 100=10° |
 |  max_angle_inclination_pit  | 300 | Maximum inclination in level (angle) mode (PITCH axis). 100=10° |
 |  fw_iterm_limit_stick_position  | 0.5 | Iterm is not allowed to grow when stick position is above threshold. This solves the problem of bounceback or followthrough when full stick deflection is applied on poorely tuned fixed wings. In other words, stabilization is partialy disabled when pilot is actively controlling the aircraft and active when sticks are not touched. `0` mean stick is in center position, `1` means it is fully deflected to either side |
@@ -414,6 +423,10 @@ A shorter form is also supported to enable and disable functions using `serial <
 |  acc_lpf_type  | BIQUAD | Specifies the type of the software LPF of the acc signals. BIQUAD gives better filtering and more delay, PT1 less filtering and less delay, so use only on clean builds. |
 |  dterm_lpf_hz  | 40 | Dterm low pass filter cutoff frequency. Default setting is very conservative and small multirotors should use higher value between 80 and 100Hz. 80 seems like a gold spot for 7-inch builds while 100 should work best with 5-inch machines. If motors are getting too hot, lower the value |
 |  yaw_lpf_hz  | 30 | Yaw low pass filter cutoff frequency. Should be disabled (set to `0`) on small multirotors (7 inches and below) |
+| dyn_notch_width_percent | 8   | Distance in % of the attenuated frequency for double dynamic filter notched. When set to `0` single dynamic notch filter is used |
+| dyn_notch_range   |   MEDIUM  | Dynamic gyro filter range. Possible values `LOW` `MEDIUM` `HIGH`. `MEDIUM` should work best for 5-6" multirotors. `LOW` should work best with 7" and bigger. `HIGH` should work with everything below 4" |
+| dyn_notch_q       | 120       | Q factor for dynamic notches |
+| dyn_notch_min_hz  | 150       | Minimum frequency for dynamic notches. Default value of `150` works best with 5" multirors. Should be lowered with increased size of propellers. Values around `100` work fine on 7" drones. 10" can go down to `60` - `70` | 
 |  gyro_stage2_lowpass_hz  | 0 | Software based second stage lowpass filter for gyro. Value is cutoff frequency (Hz). Currently experimental |
 |  pidsum_limit  | 500 | A limitation to overall amount of correction Flight PID can request on each axis (Roll/Pitch/Yaw). If when doing a hard maneuver on one axis machine looses orientation on other axis - reducing this parameter may help |
 |  yaw_p_limit  | 300 |  |
@@ -473,7 +486,22 @@ A shorter form is also supported to enable and disable functions using `serial <
 | nav_mc_pos_deceleration_time | 120 | Used for stoping distance calculation. Stop position is computed as _speed_ * _nav_mc_pos_deceleration_time_ from the place where sticks are released. Braking mode overrides this setting |
 | nav_mc_pos_expo | 10 | Expo for PosHold control |
 | osd_artificial_horizon_max_pitch | 20 | Max pitch, in degrees, for OSD artificial horizon |
-| baro_cal_tolerance | 150 | Baro calibration tolerance in cm. The default  should allow the noisiest baro to complete calibration [cm]. | 
-| mc_airmode_type | STICK_CENTER | Defines the Airmode state handling type for Multirotors. Default **STICK_CENTER** is the classical approach in which Airmode is always active if enabled, but when the throttle is low and ROLL/PITCH/YAW sticks are centered, Iterms is not allowed to grow (ANTI_WINDUP). **THROTTLE_THRESHOLD** is the Airmode behavior known from Betaflight. In this mode, Airmode is active as soon THROTTLE position is above `mc_airmode_threshold` and stays active until disarm. ANTI_WINDUP is never triggered. For small Multirotors (up to 7-inch propellers) it is suggested to switch to **THROTTLE_THRESHOLD** since it keeps full stabilization no matter what pilot does with the sticks. Fixed Wings always use **STICK_CENTER** mode. | 
-| mc_airmode_threshold | 1300 | Defines airmode THROTTLE activation threshold when `mc_airmode_type` **THROTTLE_THRESHOLD** is used | 
-| use_dterm_fir_filter | ON | Setting to **OFF** disabled extra filter on Dterm. **OFF** offers faster Dterm and better inflight performance with a cost of being more sensitive to gyro noise. Small and relatively clean multirotors (7 inches and below) are suggested to use **OFF** setting. If motors are getting too hot, switch back to **ON** | 
+| baro_cal_tolerance | 150 | Baro calibration tolerance in cm. The default  should allow the noisiest baro to complete calibration [cm]. |
+| mc_airmode_type | STICK_CENTER | Defines the Airmode state handling type for Multirotors. Default **STICK_CENTER** is the classical approach in which Airmode is always active if enabled, but when the throttle is low and ROLL/PITCH/YAW sticks are centered, Iterms is not allowed to grow (ANTI_WINDUP). **THROTTLE_THRESHOLD** is the Airmode behavior known from Betaflight. In this mode, Airmode is active as soon THROTTLE position is above `mc_airmode_threshold` and stays active until disarm. ANTI_WINDUP is never triggered. For small Multirotors (up to 7-inch propellers) it is suggested to switch to **THROTTLE_THRESHOLD** since it keeps full stabilization no matter what pilot does with the sticks. Fixed Wings always use **STICK_CENTER** mode. |
+| mc_airmode_threshold | 1300 | Defines airmode THROTTLE activation threshold when `mc_airmode_type` **THROTTLE_THRESHOLD** is used |
+| use_dterm_fir_filter | ON | Setting to **OFF** disabled extra filter on Dterm. **OFF** offers faster Dterm and better inflight performance with a cost of being more sensitive to gyro noise. Small and relatively clean multirotors (7 inches and below) are suggested to use **OFF** setting. If motors are getting too hot, switch back to **ON** |
+| sim_ground_station_number | Empty string | Number of phone that is used to communicate with SIM module. Messages / calls from other numbers are ignored. If undefined, can be set by calling or sending a message to the module. |
+| sim_pin | Empty string | PIN code for the SIM module |
+| sim_transmit_interval | 60 | Text message transmission interval in seconds for SIM module. Minimum value: 10 |
+| sim_transmit_flags | F | String specifying text message transmit condition flags for the SIM module. Flags can be given in any order. Empty string means the module only sends response messages. `A`: acceleration events, `T`: continuous transmission, `F`: continuous transmission in failsafe mode, `L`: continuous transmission when altitude is below `sim_low_altitude`, `G`: continuous transmission when GPS signal quality is low |
+| acc_event_threshold_high | 0 | Acceleration threshold [cm/s/s] for impact / high g event text messages sent by SIM module. Acceleration values greater than 4 g can occur in fixed wing flight without an impact, so a setting of 4000 or greater is suggested. 0 = detection off. |
+| acc_event_threshold_low | 0 | Acceleration threshold [cm/s/s] for low-g / freefall detection text messages sent by SIM module. A setting of less than 100 is suggested. Valid values: [0-900], 0 = detection off. |
+| acc_event_threshold_neg_x | 0 | Acceleration threshold [cm/s/s] for backwards acceleration / fixed wing landing detection text messages sent by SIM module. Suggested value for fixed wing: 1100. 0 = detection off. |
+| sim_low_altitude | 0 | Threshold for low altitude warning messages sent by SIM module when the 'L' transmit flag is set in `sim_transmit_flags`.|
+| rssi_source       | `AUTO`    | Source of RSSI input. Possible values: `NONE`, `AUTO`, `ADC`, `CHANNEL`, `PROTOCOL`, `MSP` |
+| throttle_scale    | 1.000     | Throttle scaling factor. `1` means no throttle scaling. `0.5` means throttle scaled down by 50% |
+| vbat_meter_type   | `ADC`     | Vbat voltage source. Possible values: `NONE`, `ADC`, `ESC`. `ESC` required ESC telemetry enebled and running |
+| antigravity_gain  | 1         | Max Antigravity gain. `1` means Antigravity is disabled, `2` means Iterm is allowed to double during rapid throttle movements |
+| antigravity_accelerator | 1   | |
+| antigravity_cutoff_lpf_hz | 15    | Antigravity cutoff frequenct for Throtte filter. Antigravity is based on the difference between actual and filtered throttle input. The bigger is the difference, the bigger Antigravity gain |
+| sim_pin   |   | PIN for GSM card module |

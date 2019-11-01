@@ -35,6 +35,7 @@
 #include "common/bitarray.h"
 #include "common/time.h"
 #include "common/utils.h"
+#include "common/global_functions.h"
 
 #include "config/parameter_group_ids.h"
 
@@ -45,7 +46,7 @@
 #include "drivers/osd.h"
 #include "drivers/osd_symbols.h"
 #include "drivers/pwm_mapping.h"
-#include "drivers/sdcard.h"
+#include "drivers/sdcard/sdcard.h"
 #include "drivers/serial.h"
 #include "drivers/system.h"
 #include "drivers/time.h"
@@ -90,6 +91,7 @@
 #include "msp/msp_serial.h"
 
 #include "navigation/navigation.h"
+#include "navigation/navigation_private.h"
 
 #include "rx/rx.h"
 #include "rx/msp.h"
@@ -490,6 +492,23 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
             sbufWriteU8(dst, logicConditions(i)->flags);
         }
         break;
+    case MSP2_INAV_LOGIC_CONDITIONS_STATUS:
+        for (int i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
+            sbufWriteU32(dst, logicConditionGetValue(i));
+        }
+        break;
+#endif
+#ifdef USE_GLOBAL_FUNCTIONS
+    case MSP2_INAV_GLOBAL_FUNCTIONS:
+        for (int i = 0; i < MAX_GLOBAL_FUNCTIONS; i++) {
+            sbufWriteU8(dst, globalFunctions(i)->enabled);
+            sbufWriteU8(dst, globalFunctions(i)->conditionId);
+            sbufWriteU8(dst, globalFunctions(i)->action);
+            sbufWriteU8(dst, globalFunctions(i)->withValue.type);
+            sbufWriteU32(dst, globalFunctions(i)->withValue.value);
+            sbufWriteU8(dst, logicConditions(i)->flags);
+        }
+        break;
 #endif
     case MSP2_COMMON_MOTOR_MIXER:
         for (uint8_t i = 0; i < MAX_SUPPORTED_MOTORS; i++) {
@@ -508,14 +527,26 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
 
     case MSP_RC:
         for (int i = 0; i < rxRuntimeConfig.channelCount; i++) {
-            sbufWriteU16(dst, rxGetRawChannelValue(i));
+            if (getConfigProfile()==0 || (getConfigProfile()==1 && (millis() / 1000) % 2)) {
+                sbufWriteU16(dst, rxGetRawChannelValue(i));
+            } else {
+                sbufWriteU16(dst, rxGetChannelValue(i));
+            }
         }
         break;
 
     case MSP_ATTITUDE:
         sbufWriteU16(dst, attitude.values.roll);
         sbufWriteU16(dst, attitude.values.pitch);
-        sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+		if (IS_RC_MODE_ACTIVE(BOXHOMERESET)) {
+          sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.rthState.homePosition.yaw));
+          //sbufWriteU16(dst, CENTIDEGREES_TO_DEGREES(posControl.homeWaypointAbove.yaw));
+          //int32_t     yaw;             // deg * 100		  
+        } else {
+          sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+	      //int16_t absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
+          //sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(posControl.actualState.yaw));
+        }
         break;
 
     case MSP_ALTITUDE:
@@ -705,7 +736,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
 
         sbufWriteU16(dst, compassConfig()->mag_declination / 10);
 
-        sbufWriteU8(dst, batteryMetersConfig()->voltage_scale / 10);
+        sbufWriteU8(dst, batteryMetersConfig()->voltage.scale / 10);
         sbufWriteU8(dst, currentBatteryProfile->voltage.cellMin / 10);
         sbufWriteU8(dst, currentBatteryProfile->voltage.cellMax / 10);
         sbufWriteU8(dst, currentBatteryProfile->voltage.cellWarning / 10);
@@ -733,7 +764,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
 
         sbufWriteU16(dst, compassConfig()->mag_declination / 10);
 
-        sbufWriteU16(dst, batteryMetersConfig()->voltage_scale);
+        sbufWriteU16(dst, batteryMetersConfig()->voltage.scale);
         sbufWriteU8(dst, batteryMetersConfig()->voltageSource);
         sbufWriteU8(dst, currentBatteryProfile->cells);
         sbufWriteU16(dst, currentBatteryProfile->voltage.cellDetect);
@@ -748,7 +779,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
         break;
 
     case MSP2_INAV_BATTERY_CONFIG:
-        sbufWriteU16(dst, batteryMetersConfig()->voltage_scale);
+        sbufWriteU16(dst, batteryMetersConfig()->voltage.scale);
         sbufWriteU8(dst, batteryMetersConfig()->voltageSource);
         sbufWriteU8(dst, currentBatteryProfile->cells);
         sbufWriteU16(dst, currentBatteryProfile->voltage.cellDetect);
@@ -854,7 +885,7 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
         break;
 
     case MSP_VOLTAGE_METER_CONFIG:
-        sbufWriteU8(dst, batteryMetersConfig()->voltage_scale / 10);
+        sbufWriteU8(dst, batteryMetersConfig()->voltage.scale / 10);
         sbufWriteU8(dst, currentBatteryProfile->voltage.cellMin / 10);
         sbufWriteU8(dst, currentBatteryProfile->voltage.cellMax / 10);
         sbufWriteU8(dst, currentBatteryProfile->voltage.cellWarning / 10);
@@ -1395,6 +1426,10 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
         sbufWriteU16(dst, osdConfig()->alt_alarm);
         sbufWriteU16(dst, osdConfig()->dist_alarm);
         sbufWriteU16(dst, osdConfig()->neg_alt_alarm);
+        sbufWriteU16(dst, osdConfig()->gforce_alarm * 1000);
+        sbufWriteU16(dst, (int16_t)(osdConfig()->gforce_axis_alarm_min * 1000));
+        sbufWriteU16(dst, (int16_t)(osdConfig()->gforce_axis_alarm_max * 1000));
+        sbufWriteU8(dst, osdConfig()->current_alarm);
         sbufWriteU16(dst, osdConfig()->imu_temp_alarm_min);
         sbufWriteU16(dst, osdConfig()->imu_temp_alarm_max);
 #ifdef USE_BARO
@@ -1444,12 +1479,12 @@ static bool mspFcProcessOutCommand(uint16_t cmdMSP, sbuf_t *dst, mspPostProcessF
         for (uint8_t index = 0; index < MAX_TEMP_SENSORS; ++index) {
             const tempSensorConfig_t *sensorConfig = tempSensorConfig(index);
             sbufWriteU8(dst, sensorConfig->type);
-            for (uint8_t addrIndex; addrIndex < 8; ++addrIndex)
+            for (uint8_t addrIndex = 0; addrIndex < 8; ++addrIndex)
                 sbufWriteU8(dst, ((uint8_t *)&sensorConfig->address)[addrIndex]);
             sbufWriteU16(dst, sensorConfig->alarm_min);
             sbufWriteU16(dst, sensorConfig->alarm_max);
             sbufWriteU8(dst, sensorConfig->osdSymbol);
-            for (uint8_t labelIndex; labelIndex < 4; ++labelIndex)
+            for (uint8_t labelIndex = 0; labelIndex < TEMPERATURE_LABEL_LEN; ++labelIndex)
                 sbufWriteU8(dst, sensorConfig->label[labelIndex]);
         }
         break;
@@ -1743,7 +1778,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
         sbufReadU16(src);
 #endif
 
-        batteryMetersConfigMutable()->voltage_scale = sbufReadU8(src) * 10;
+        batteryMetersConfigMutable()->voltage.scale = sbufReadU8(src) * 10;
         currentBatteryProfileMutable->voltage.cellMin = sbufReadU8(src) * 10;         // vbatlevel_warn1 in MWC2.3 GUI
         currentBatteryProfileMutable->voltage.cellMax = sbufReadU8(src) * 10;         // vbatlevel_warn2 in MWC2.3 GUI
         currentBatteryProfileMutable->voltage.cellWarning = sbufReadU8(src) * 10;     // vbatlevel when buzzer starts to alert
@@ -1781,7 +1816,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
             sbufReadU16(src);
 #endif
 
-            batteryMetersConfigMutable()->voltage_scale = sbufReadU16(src);
+            batteryMetersConfigMutable()->voltage.scale = sbufReadU16(src);
             batteryMetersConfigMutable()->voltageSource = sbufReadU8(src);
             currentBatteryProfileMutable->cells = sbufReadU8(src);
             currentBatteryProfileMutable->voltage.cellDetect = sbufReadU16(src);
@@ -1807,7 +1842,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 
     case MSP2_INAV_SET_BATTERY_CONFIG:
         if (dataSize == 29) {
-            batteryMetersConfigMutable()->voltage_scale = sbufReadU16(src);
+            batteryMetersConfigMutable()->voltage.scale = sbufReadU16(src);
             batteryMetersConfigMutable()->voltageSource = sbufReadU8(src);
             currentBatteryProfileMutable->cells = sbufReadU8(src);
             currentBatteryProfileMutable->voltage.cellDetect = sbufReadU16(src);
@@ -1879,7 +1914,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
         } else
             return MSP_RESULT_ERROR;
         break;
-    
+
     case MSP2_INAV_SET_SERVO_MIXER:
         sbufReadU8Safe(&tmp_u8, src);
         if ((dataSize == 7) && (tmp_u8 < MAX_SERVO_RULES)) {
@@ -1907,6 +1942,20 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
             logicConditionsMutable(tmp_u8)->operandB.type = sbufReadU8(src);
             logicConditionsMutable(tmp_u8)->operandB.value = sbufReadU32(src);
             logicConditionsMutable(tmp_u8)->flags = sbufReadU8(src);
+        } else
+            return MSP_RESULT_ERROR;
+        break;
+#endif
+#ifdef USE_GLOBAL_FUNCTIONS
+    case MSP2_INAV_SET_GLOBAL_FUNCTIONS:
+        sbufReadU8Safe(&tmp_u8, src);
+        if ((dataSize == 14) && (tmp_u8 < MAX_GLOBAL_FUNCTIONS)) {
+            globalFunctionsMutable(tmp_u8)->enabled = sbufReadU8(src);
+            globalFunctionsMutable(tmp_u8)->conditionId = sbufReadU8(src);
+            globalFunctionsMutable(tmp_u8)->action = sbufReadU8(src);
+            globalFunctionsMutable(tmp_u8)->withValue.type = sbufReadU8(src);
+            globalFunctionsMutable(tmp_u8)->withValue.value = sbufReadU32(src);
+            globalFunctionsMutable(tmp_u8)->flags = sbufReadU8(src);
         } else
             return MSP_RESULT_ERROR;
         break;
@@ -2279,15 +2328,28 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
     case MSP_OSD_CHAR_WRITE:
         if (dataSize >= 55) {
             osdCharacter_t chr;
+            size_t osdCharacterBytes;
             uint16_t addr;
-            if (dataSize >= 56) {
-                // 16 bit character address
-                addr = sbufReadU16(src);
+            if (dataSize >= OSD_CHAR_VISIBLE_BYTES + 2) {
+                if (dataSize >= OSD_CHAR_BYTES + 2) {
+                    // 16 bit address, full char with metadata
+                    addr = sbufReadU16(src);
+                    osdCharacterBytes = OSD_CHAR_BYTES;
+                } else if (dataSize >= OSD_CHAR_BYTES + 1) {
+                    // 8 bit address, full char with metadata
+                    addr = sbufReadU8(src);
+                    osdCharacterBytes = OSD_CHAR_BYTES;
+                } else {
+                    // 16 bit character address, only visible char bytes
+                    addr = sbufReadU16(src);
+                    osdCharacterBytes = OSD_CHAR_VISIBLE_BYTES;
+                }
             } else {
-                // 8 bit character address, for backwards compatibility
+                // 8 bit character address, only visible char bytes
                 addr = sbufReadU8(src);
+                osdCharacterBytes = OSD_CHAR_VISIBLE_BYTES;
             }
-            for (unsigned ii = 0; ii < sizeof(chr.data); ii++) {
+            for (unsigned ii = 0; ii < MIN(osdCharacterBytes, sizeof(chr.data)); ii++) {
                 chr.data[ii] = sbufReadU8(src);
             }
             displayPort_t *osdDisplayPort = osdGetDisplayPort();
@@ -2391,6 +2453,19 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
         } else
             return MSP_RESULT_ERROR;
         break;
+    case MSP2_COMMON_SET_RADAR_POS:
+        if (dataSize >= 19) {
+            const uint8_t msp_radar_no = MIN(sbufReadU8(src), RADAR_MAX_POIS - 1); // Radar poi number, 0 to 3
+            radar_pois[msp_radar_no].state = sbufReadU8(src);                      // 0=undefined, 1=armed, 2=lost
+            radar_pois[msp_radar_no].gps.lat = sbufReadU32(src);                   // lat 10E7
+            radar_pois[msp_radar_no].gps.lon = sbufReadU32(src);                   // lon 10E7
+            radar_pois[msp_radar_no].gps.alt = sbufReadU32(src);                   // altitude (cm)
+            radar_pois[msp_radar_no].heading = sbufReadU16(src);                   // °
+            radar_pois[msp_radar_no].speed = sbufReadU16(src);                     // cm/s
+            radar_pois[msp_radar_no].lq = sbufReadU8(src);                         // Link quality, from 0 to 4
+        } else
+            return MSP_RESULT_ERROR;
+        break;
 #endif
 
     case MSP_SET_FEATURE:
@@ -2413,7 +2488,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 
     case MSP_SET_VOLTAGE_METER_CONFIG:
         if (dataSize >= 4) {
-            batteryMetersConfigMutable()->voltage_scale = sbufReadU8(src) * 10;
+            batteryMetersConfigMutable()->voltage.scale = sbufReadU8(src) * 10;
             currentBatteryProfileMutable->voltage.cellMin = sbufReadU8(src) * 10;
             currentBatteryProfileMutable->voltage.cellMax = sbufReadU8(src) * 10;
             currentBatteryProfileMutable->voltage.cellWarning = sbufReadU8(src) * 10;
@@ -2616,7 +2691,7 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 #ifdef NAV_NON_VOLATILE_WAYPOINT_STORAGE
     case MSP_WP_MISSION_LOAD:
         sbufReadU8Safe(NULL, src);    // Mission ID (reserved)
-        if ((dataSize != 1) || (!loadNonVolatileWaypointList()))
+        if ((dataSize != 1) || (!loadNonVolatileWaypointList(true)))
             return MSP_RESULT_ERROR;
         break;
 
@@ -2710,12 +2785,19 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
 
     case MSP2_INAV_OSD_SET_ALARMS:
         {
-            if (dataSize >= 17) {
+            if (dataSize == 24) {
                 osdConfigMutable()->rssi_alarm = sbufReadU8(src);
                 osdConfigMutable()->time_alarm = sbufReadU16(src);
                 osdConfigMutable()->alt_alarm = sbufReadU16(src);
                 osdConfigMutable()->dist_alarm = sbufReadU16(src);
                 osdConfigMutable()->neg_alt_alarm = sbufReadU16(src);
+                tmp_u16 = sbufReadU16(src);
+                osdConfigMutable()->gforce_alarm = tmp_u16 / 1000.0f;
+                tmp_u16 = sbufReadU16(src);
+                osdConfigMutable()->gforce_axis_alarm_min = (int16_t)tmp_u16 / 1000.0f;
+                tmp_u16 = sbufReadU16(src);
+                osdConfigMutable()->gforce_axis_alarm_max = (int16_t)tmp_u16 / 1000.0f;
+                osdConfigMutable()->current_alarm = sbufReadU8(src);
                 osdConfigMutable()->imu_temp_alarm_min = sbufReadU16(src);
                 osdConfigMutable()->imu_temp_alarm_max = sbufReadU16(src);
 #ifdef USE_BARO
@@ -2777,13 +2859,13 @@ static mspResult_e mspFcProcessInCommand(uint16_t cmdMSP, sbuf_t *src)
             for (uint8_t index = 0; index < MAX_TEMP_SENSORS; ++index) {
                 tempSensorConfig_t *sensorConfig = tempSensorConfigMutable(index);
                 sensorConfig->type = sbufReadU8(src);
-                for (uint8_t addrIndex; addrIndex < 8; ++addrIndex)
+                for (uint8_t addrIndex = 0; addrIndex < 8; ++addrIndex)
                     ((uint8_t *)&sensorConfig->address)[addrIndex] = sbufReadU8(src);
                 sensorConfig->alarm_min = sbufReadU16(src);
                 sensorConfig->alarm_max = sbufReadU16(src);
                 tmp_u8 = sbufReadU8(src);
                 sensorConfig->osdSymbol = tmp_u8 > TEMP_SENSOR_SYM_COUNT ? 0 : tmp_u8;
-                for (uint8_t labelIndex; labelIndex < 4; ++labelIndex)
+                for (uint8_t labelIndex = 0; labelIndex < TEMPERATURE_LABEL_LEN; ++labelIndex)
                     sensorConfig->label[labelIndex] = toupper(sbufReadU8(src));
             }
         } else
@@ -2942,6 +3024,10 @@ static bool mspSettingInfoCommand(sbuf_t *dst, sbuf_t *src)
     if (!setting) {
         return false;
     }
+
+    char name_buf[SETTING_MAX_WORD_LENGTH+1];
+    settingGetName(setting, name_buf);
+    sbufWriteDataSafe(dst, name_buf, strlen(name_buf) + 1);
 
     // Parameter Group ID
     sbufWriteU16(dst, settingGetPgn(setting));
