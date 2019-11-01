@@ -65,6 +65,13 @@ typedef enum {
     NAV_HOME_VALID_ALL = NAV_HOME_VALID_XY | NAV_HOME_VALID_Z | NAV_HOME_VALID_HEADING,
 } navigationHomeFlags_t;
 
+typedef enum {
+    NAV_HOME_MIN_RTH = 0, //actual yaw, always
+    NAV_HOME_DISARM = 1, //actual yaw, navigationActualStateHomeValidity
+    NAV_HOME_RESET = 2, //actual yaw, navigationActualStateHomeValidity
+    NAV_HOME_WP = 3, //0 always
+} navigationHomeReason_t;
+
 typedef struct navigationFlags_s {
     bool horizontalPositionDataNew;
     bool verticalPositionDataNew;
@@ -120,6 +127,14 @@ typedef struct {
     fpVector3_t vel;
     int32_t     yaw;
 } navigationDesiredState_t;
+
+typedef struct {
+    float posX;
+    float posY;
+    float errorX;
+    float errorY;
+    float distance;
+} loiter_t;
 
 typedef enum {
     NAV_FSM_EVENT_NONE = 0,
@@ -359,6 +374,7 @@ typedef struct {
     navWaypointPosition_t       activeWaypoint;     // Local position and initial bearing, filled on waypoint activation
     int8_t                      activeWaypointIndex;
     uint32_t                    lastWaypointReachedAt;
+    navWaypointPosition_t       lastWaypoint; 
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];
@@ -380,6 +396,7 @@ void navPidReset(pidController_t *pid);
 void navPidInit(pidController_t *pid, float _kP, float _kI, float _kD, float _kFF, float _dTermLpfHz);
 
 bool isThrustFacingDownwards(void);
+uint32_t calculateDistance(const fpVector3_t * fromPos, const fpVector3_t * toPos);
 uint32_t calculateDistanceToDestination(const fpVector3_t * destinationPos);
 int32_t calculateBearingToDestination(const fpVector3_t * destinationPos);
 void resetLandingDetector(void);
@@ -387,7 +404,7 @@ bool isLandingDetected(void);
 
 navigationFSMStateFlags_t navGetCurrentStateFlags(void);
 
-void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags);
+void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags, navigationHomeReason_t reason);
 void setDesiredPosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask);
 void setDesiredSurfaceOffset(float surfaceOffset);
 void setDesiredPositionToFarAwayTarget(int32_t yaw, int32_t distance, navSetWaypointFlags_t useMask);
