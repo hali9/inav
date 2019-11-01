@@ -36,6 +36,10 @@
 #define USE_MSP_DISPLAYPORT
 #endif
 
+#if defined(USE_OSD) && (FLASH_SIZE > 256)
+#define USE_CANVAS
+#endif
+
 #ifdef USE_ITCM_RAM
 #define FAST_CODE                   __attribute__((section(".tcm_code")))
 #define NOINLINE                    __NOINLINE
@@ -45,9 +49,13 @@
 #endif
 
 #ifdef STM32F3
-#undef USE_WIND_ESTIMATOR
 #undef USE_SERIALRX_SUMD
 #undef USE_SERIALRX_SUMH
 #undef USE_SERIALRX_XBUS
 #undef USE_SERIALRX_JETIEXBUS
+#endif
+
+#if defined(SIMULATOR_BUILD) || defined(UNIT_TEST)
+// This feature uses 'arm_math.h', which does not exist for x86.
+#undef USE_DYNAMIC_FILTERS
 #endif
