@@ -227,6 +227,36 @@ static int8_t loiterDirection(void) {
     return dir;
 }
 
+static float calculateCrossTrackError(bool loiter) //need wp-head
+{
+    float posErrorX = posControl.desiredState.pos.x - navGetCurrentActualPositionAndVelocity()->pos.x;
+    float posErrorY = posControl.desiredState.pos.y - navGetCurrentActualPositionAndVelocity()->pos.y;
+    float distanceToActualTarget = sqrtf(sq(posErrorX) + sq(posErrorY));
+    float loiterAngle = atan2_approx(-posErrorY, -posErrorX);
+	if (loiter) {
+        float loiterCorrectX = posControl.desiredState.pos.x + navConfig()->fw.loiter_radius * cos_approx(loiterAngle);
+        float loiterCorrectY = posControl.desiredState.pos.y + navConfig()->fw.loiter_radius * sin_approx(loiterAngle);
+        posErrorX = loiterCorrectX - posControl.desiredState.pos.x;
+        posErrorY = loiterCorrectY - posControl.desiredState.pos.y;	
+        float distanceToActualTargetFromCorrect = sqrtf(sq(posErrorX) + sq(posErrorY));	
+        float crossTrackError = distanceToActualTarget - distanceToActualTargetFromCorrect; //<0 inside, 0> outside
+        return crossTrackError * loiterDirection(); //<0 must turn left, >0 must turn right
+	} else {
+        //set on WAYPOINT_INITIALIZE wp-head, WAYPOINT_REACHED wp-head, RTH_CLIMB_TO_SAFE_ALT before NAV_FSM_EVENT_SUCCESS
+        float lastErrorX = posControl.desiredState.pos.x - posControl.lastWaypoint.pos.x; //B = xa - xb;
+        float lastErrorY = posControl.desiredState.pos.y - posControl.lastWaypoint.pos.y; //A = ya - yb;
+		float distanceToActualTargetFromLast = sqrtf(sq(lastErrorX) + sq(lastErrorY));
+		//(y-ya)*(xb-xa)-(yb-ya)*(x-xa)=0
+		//(xb-xa)*(y-ya)-(yb-ya)*(x-xa)=0
+		//(xa-xb)*(ya-y)-(ya-yb)*(xa-x)=0
+		//B*(ya-y)-A*(xa-x)=0
+        float crossTrackError = 0.0f;
+		if (distanceToActualTargetFromLast > 50.0f)
+		    crossTrackError = (lastErrorX * posErrorY - lastErrorY * posErrorX) / distanceToActualTargetFromLast;
+		return crossTrackError;
+	}
+}
+
 static void calculateVirtualPositionTarget_FW(float trackingPeriod)
 {
     float posErrorX = posControl.desiredState.pos.x - navGetCurrentActualPositionAndVelocity()->pos.x;
