@@ -1355,6 +1355,8 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_INITIALIZE(nav
         resetAltitudeController(false);
         setupAltitudeController();
 
+        posControl.lastWaypointPos = navGetCurrentActualPositionAndVelocity()->pos;
+
         posControl.activeWaypointIndex = 0;
         return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_PRE_ACTION
     }
@@ -1392,7 +1394,19 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                     return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_REACHED
                 }
                 else {
-                    setDesiredPosition(&posControl.activeWaypoint.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_BEARING);
+                    uint32_t distance = calculateDistance(&posControl.lastWaypointPos, &posControl.activeWaypoint.pos); //between last waypoint and active waypoint  
+                    uint32_t distanceDest = calculateDistanceToDestination(&posControl.activeWaypoint.pos); //from current position to active waypoint
+                    fpVector3_t tmpWaypoint;
+                    tmpWaypoint.x = posControl.activeWaypoint.pos.x;
+                    tmpWaypoint.y = posControl.activeWaypoint.pos.y;
+                    tmpWaypoint.z = scaleRange(distanceDest, distance, distance / 10, posControl.lastWaypointPos.z, posControl.activeWaypoint.pos.z);
+                    if (posControl.lastWaypointPos.z < posControl.activeWaypoint.pos.z) {
+                        tmpWaypoint.z = constrainf(tmpWaypoint.z, posControl.lastWaypointPos.z, posControl.activeWaypoint.pos.z);
+                    }
+                    else {
+                        tmpWaypoint.z = constrainf(tmpWaypoint.z, posControl.activeWaypoint.pos.z, posControl.lastWaypointPos.z);
+                    }
+                    setDesiredPosition(&tmpWaypoint, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING);
                     return NAV_FSM_EVENT_NONE;      // will re-process state in >10ms
                 }
                 break;
@@ -1421,6 +1435,10 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(navigationFSMState_t previousState)
 {
     UNUSED(previousState);
+
+    posControl.lastWaypointPos.x = posControl.activeWaypoint.pos.x;
+    posControl.lastWaypointPos.y = posControl.activeWaypoint.pos.y;
+    posControl.lastWaypointPos.z = navGetCurrentActualPositionAndVelocity()->pos.z;
 
     switch (posControl.waypointList[posControl.activeWaypointIndex].action) {
         case NAV_WP_ACTION_RTH:
@@ -1989,6 +2007,14 @@ static uint32_t calculateDistanceFromDelta(float deltaX, float deltaY)
 static int32_t calculateBearingFromDelta(float deltaX, float deltaY)
 {
     return wrap_36000(RADIANS_TO_CENTIDEGREES(atan2_approx(deltaY, deltaX)));
+}
+
+uint32_t calculateDistance(const fpVector3_t * fromPos, const fpVector3_t * toPos)
+{
+    const float deltaX = fromPos->x - toPos->x;
+    const float deltaY = fromPos->y - toPos->y;
+
+    return calculateDistanceFromDelta(deltaX, deltaY);
 }
 
 uint32_t calculateDistanceToDestination(const fpVector3_t * destinationPos)
