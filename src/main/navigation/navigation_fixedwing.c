@@ -260,10 +260,10 @@ static float calculateCrossTrackError(void)
 {
     float posErrorX = posControl.desiredState.pos.x - navGetCurrentActualPositionAndVelocity()->pos.x; // 0 - (4) 
     float posErrorY = posControl.desiredState.pos.y - navGetCurrentActualPositionAndVelocity()->pos.y; // 0 - (-3)
-	if (posControl.trackType == NAV_TRACK_TYPE_LOITER_LAND) {
-	    posErrorX = posControl.lastWaypoint.pos.x - navGetCurrentActualPositionAndVelocity()->pos.x;
+    if (posControl.trackType == NAV_TRACK_TYPE_LOITER_LAND) {
+        posErrorX = posControl.lastWaypoint.pos.x - navGetCurrentActualPositionAndVelocity()->pos.x;
         posErrorY = posControl.lastWaypoint.pos.y - navGetCurrentActualPositionAndVelocity()->pos.y;
-	}
+    }
     float distanceToActualTarget = sqrtf(sq(posErrorX) + sq(posErrorY));
     float crossTrackError = distanceToActualTarget - navConfig()->fw.loiter_radius; //<0 inside, 0> outside
     float crossTrackErrorLoiter = crossTrackError * loiterDirection(); //<0 must turn left, >0 must turn right
@@ -280,15 +280,15 @@ static float calculateCrossTrackError(void)
     //B*(ya-y)-A*(xa-x)=0             // -6           4     -       8          -2       / 10  = -24 + 16 / 10 = -8 / 10
 
     float crossTrackErrorVirtual = 0.0f;
-	if (oldVirtualDesiredPosition.x <> 0 && oldVirtualDesiredPosition.y <> 0) {
-	    float virtErrorX = virtualDesiredPosition.x - oldVirtualDesiredPosition.x;
-	    float virtErrorY = virtualDesiredPosition.y - oldVirtualDesiredPosition.y;
+    if (oldVirtualDesiredPosition.x <> 0 && oldVirtualDesiredPosition.y <> 0) {
+        float virtErrorX = virtualDesiredPosition.x - oldVirtualDesiredPosition.x;
+        float virtErrorY = virtualDesiredPosition.y - oldVirtualDesiredPosition.y;
         float distanceToVirtualTargetFromOldVirt = sqrtf(sq(lastErrorX) + sq(lastErrorY));
         if (distanceToVirtualTargetFromOldVirt > 50.0f)
             crossTrackErrorVirtual = ((lastErrorY * posErrorX) - (lastErrorX * posErrorY)) / distanceToActualTargetFromLast;
     }
-	oldVirtualDesiredPosition.x = virtualDesiredPosition.x;
-	oldVirtualDesiredPosition.Y = virtualDesiredPosition.y;
+    oldVirtualDesiredPosition.x = virtualDesiredPosition.x;
+    oldVirtualDesiredPosition.Y = virtualDesiredPosition.y;
 
     DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 0, lrintf(crossTrackErrorLoiter));
     DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 1, lrintf(crossTrackErrorStraight));
@@ -362,19 +362,19 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
                 if (virtualAproach == NAV_RTH_APROACH_LANDING_DECISION || virtualAproach == NAV_RTH_APROACH_LANDING_SAFEALT) {
                     calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS(posControl.rthState.homePosition.yaw + angle), distanceAproach , 0, 0);
                     if (loiter.distance < navConfig()->fw.loiter_radius * 1.2f) {
-					    posControl.trackType = NAV_TRACK_TYPE_LOITER_LAND;
-						posControl.lastWaypoint.pos.x = loiter.posX;
-					    posControl.lastWaypoint.pos.y = loiter.posY;
-					} else if (posControl.trackType != NAV_TRACK_TYPE_LOITER_LAND) posControl.trackType = NAV_TRACK_TYPE_VIRTUAL;
+                        posControl.trackType = NAV_TRACK_TYPE_LOITER_LAND;
+                        posControl.lastWaypoint.pos.x = loiter.posX;
+                        posControl.lastWaypoint.pos.y = loiter.posY;
+                    } else if (posControl.trackType != NAV_TRACK_TYPE_LOITER_LAND) posControl.trackType = NAV_TRACK_TYPE_VIRTUAL;
                 }
-				if (virtualAproach == NAV_RTH_APROACH_LANDING_HOMEYAW) {
+                if (virtualAproach == NAV_RTH_APROACH_LANDING_HOMEYAW) {
                     posControl.trackType = NAV_TRACK_TYPE_NONE;
                 }
                 if (virtualAproach == NAV_RTH_APROACH_LANDING_RESET || virtualAproach == NAV_RTH_APROACH_LANDING_FINAL) {
                     calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS(posControl.rthState.homePosition.yaw), loiterRadiusTan, 0, 0);
                     posControl.trackType = NAV_TRACK_TYPE_STRAIGHT;
-					posControl.lastWaypoint.pos.x = loiter.posX;
-					posControl.lastWaypoint.pos.y = loiter.posY;
+                    posControl.lastWaypoint.pos.x = loiter.posX;
+                    posControl.lastWaypoint.pos.y = loiter.posY;
                     float aproach = MIN(loiter.distance - (M_PIf * navConfig()->fw.loiter_radius / 4), 2 * loiterRadiusTan);
                     calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS((posControl.rthState.homePosition.yaw + DEGREES_TO_CENTIDEGREES(180)) % DEGREES_TO_CENTIDEGREES(360)),
                         aproach, loiter.posX, loiter.posY);
