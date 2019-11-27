@@ -314,6 +314,14 @@ typedef enum {
     RTH_HOME_FINAL_LAND,            // Home position and altitude
 } rthTargetMode_e;
 
+enum {
+    NAV_TRACK_TYPE_NONE = 0,
+    NAV_TRACK_TYPE_LOITER = 1,
+    NAV_TRACK_TYPE_LOITER_LAND = 2,
+    NAV_TRACK_TYPE_STRAIGHT = 3,
+    NAV_TRACK_TYPE_VIRTUAL = 4,
+}
+
 typedef struct {
     /* Flags and navigation system state */
     navigationFSMState_t        navState;
@@ -354,6 +362,9 @@ typedef struct {
 
     navWaypointPosition_t       activeWaypoint;     // Local position and initial bearing, filled on waypoint activation
     int8_t                      activeWaypointIndex;
+
+    navWaypointPosition_t       lastWaypoint;
+    uint8_t                     trackType;
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];
