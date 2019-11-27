@@ -248,15 +248,15 @@ static float calculateCrossTrackError(bool loiter) //need wp-head
     //B*(ya-y)-A*(xa-x)=0             // -6           4     -       8          -2       / 10  = -24 + 16 / 10 = -8 / 10
 
     float crossTrackErrorVirtual = 0.0f;
-	if (oldVirtualDesiredPosition.x <> 0 && oldVirtualDesiredPosition.y <> 0) {
-	    float virtErrorX = virtualDesiredPosition.x - oldVirtualDesiredPosition.x;
-	    float virtErrorY = virtualDesiredPosition.y - oldVirtualDesiredPosition.y;
+    if (oldVirtualDesiredPosition.x <> 0 && oldVirtualDesiredPosition.y <> 0) {
+        float virtErrorX = virtualDesiredPosition.x - oldVirtualDesiredPosition.x;
+        float virtErrorY = virtualDesiredPosition.y - oldVirtualDesiredPosition.y;
         float distanceToVirtualTargetFromOldVirt = sqrtf(sq(lastErrorX) + sq(lastErrorY));
         if (distanceToVirtualTargetFromOldVirt > 50.0f)
             crossTrackErrorVirtual = ((lastErrorY * posErrorX) - (lastErrorX * posErrorY)) / distanceToActualTargetFromLast;
     }
-	oldVirtualDesiredPosition.x = virtualDesiredPosition.x;
-	oldVirtualDesiredPosition.Y = virtualDesiredPosition.y;
+    oldVirtualDesiredPosition.x = virtualDesiredPosition.x;
+    oldVirtualDesiredPosition.Y = virtualDesiredPosition.y;
 
     DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 0, lrintf(crossTrackErrorLoiter));
     DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 1, lrintf(crossTrackErrorStraight));
