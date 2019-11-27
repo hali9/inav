@@ -1397,15 +1397,9 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                     fpVector3_t tmpWaypoint;
                     tmpWaypoint.x = posControl.activeWaypoint.pos.x;
                     tmpWaypoint.y = posControl.activeWaypoint.pos.y;
-                    tmpWaypoint.z = scaleRange(posControl.wpDistance,
+                    tmpWaypoint.z = scaleRange(constrainf(posControl.wpDistance, posControl.wpInitialDistance / 10, posControl.wpInitialDistance),
                         posControl.wpInitialDistance, posControl.wpInitialDistance / 10,
                         posControl.wpInitialAltitude, posControl.activeWaypoint.pos.z);
-                    if (posControl.wpInitialAltitude < posControl.activeWaypoint.pos.z) {
-                        tmpWaypoint.z = constrainf(tmpWaypoint.z, posControl.wpInitialAltitude, posControl.activeWaypoint.pos.z);
-                    }
-                    else {
-                        tmpWaypoint.z = constrainf(tmpWaypoint.z, posControl.activeWaypoint.pos.z, posControl.wpInitialAltitude);
-                    }
                     setDesiredPosition(&tmpWaypoint, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING);
                     return NAV_FSM_EVENT_NONE;      // will re-process state in >10ms
                 }
