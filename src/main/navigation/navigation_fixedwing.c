@@ -255,6 +255,52 @@ static int8_t loiterDirection(void) {
     return dir;
 }
 
+static fpVector3_t oldVirtualDesiredPosition;
+static float calculateCrossTrackError(void)
+{
+    float posErrorX = posControl.desiredState.pos.x - navGetCurrentActualPositionAndVelocity()->pos.x; // 0 - (4) 
+    float posErrorY = posControl.desiredState.pos.y - navGetCurrentActualPositionAndVelocity()->pos.y; // 0 - (-3)
+	if (posControl.trackType == NAV_TRACK_TYPE_LOITER_LAND) {
+	    posErrorX = posControl.lastWaypoint.pos.x - navGetCurrentActualPositionAndVelocity()->pos.x;
+        posErrorY = posControl.lastWaypoint.pos.y - navGetCurrentActualPositionAndVelocity()->pos.y;
+	}
+    float distanceToActualTarget = sqrtf(sq(posErrorX) + sq(posErrorY));
+    float crossTrackError = distanceToActualTarget - navConfig()->fw.loiter_radius; //<0 inside, 0> outside
+    float crossTrackErrorLoiter = crossTrackError * loiterDirection(); //<0 must turn left, >0 must turn right
+
+    float lastErrorX = posControl.desiredState.pos.x - posControl.lastWaypoint.pos.x; //B = xa - xb;  0 - (8)
+    float lastErrorY = posControl.desiredState.pos.y - posControl.lastWaypoint.pos.y; //A = ya - yb;  0 - (-6)
+    float distanceToActualTargetFromLast = sqrtf(sq(lastErrorX) + sq(lastErrorY));
+    float crossTrackErrorStraight = 0.0f;
+    if (distanceToActualTargetFromLast > 50.0f)
+        crossTrackErrorStraight = ((lastErrorY * posErrorX) - (lastErrorX * posErrorY)) / distanceToActualTargetFromLast;
+    //(y-ya)*(xb-xa)-(yb-ya)*(x-xa)=0 // -6          -4     -      -8          -2       / 10  =  24 - 16 / 10 =  8 / 10
+    //(xb-xa)*(y-ya)-(yb-ya)*(x-xa)=0 //  6          -4     -      -8           2       / 10  = -24 + 16 / 10 = -8 / 10
+    //(xa-xb)*(ya-y)-(ya-yb)*(xa-x)=0 //  6           4     -       8           2       / 10  =  24 - 16 / 10 =  8 / 10
+    //B*(ya-y)-A*(xa-x)=0             // -6           4     -       8          -2       / 10  = -24 + 16 / 10 = -8 / 10
+
+    float crossTrackErrorVirtual = 0.0f;
+	if (oldVirtualDesiredPosition.x <> 0 && oldVirtualDesiredPosition.y <> 0) {
+	    float virtErrorX = virtualDesiredPosition.x - oldVirtualDesiredPosition.x;
+	    float virtErrorY = virtualDesiredPosition.y - oldVirtualDesiredPosition.y;
+        float distanceToVirtualTargetFromOldVirt = sqrtf(sq(lastErrorX) + sq(lastErrorY));
+        if (distanceToVirtualTargetFromOldVirt > 50.0f)
+            crossTrackErrorVirtual = ((lastErrorY * posErrorX) - (lastErrorX * posErrorY)) / distanceToActualTargetFromLast;
+    }
+	oldVirtualDesiredPosition.x = virtualDesiredPosition.x;
+	oldVirtualDesiredPosition.Y = virtualDesiredPosition.y;
+
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 0, lrintf(crossTrackErrorLoiter));
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 1, lrintf(crossTrackErrorStraight));
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 2, lrintf(crossTrackErrorVirtual));
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 3, posControl.trackType);
+
+    if (posControl.trackType == NAV_TRACK_TYPE_LOITER || posControl.trackType == NAV_TRACK_TYPE_LOITER_LAND) return crossTrackErrorLoiter;
+    else if (posControl.trackType == NAV_TRACK_TYPE_STRAIGHT) return crossTrackErrorStraight;
+    else if (posControl.trackType == NAV_TRACK_TYPE_VIRTUAL) return crossTrackErrorVirtual;
+    return 0.0f;
+}
+
 static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navStateFlags, float trackingPeriod)
 {
     loiter_t loiter;
@@ -279,6 +325,10 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
 
     // Calculate virtual position for straight movement
     if (needToCalculateCircularLoiter) {
+        if (virtualAproach == NAV_RTH_APROACH_LANDING_ABOVE_MAXALT || virtualAproach == NAV_RTH_APROACH_LANDING_MAXALT) {
+            if (loiter.distance < navConfig()->fw.loiter_radius * 1.2f) posControl.trackType = NAV_TRACK_TYPE_LOITER;
+            else if (posControl.trackType != NAV_TRACK_TYPE_LOITER) posControl.trackType = NAV_TRACK_TYPE_VIRTUAL;
+        }
         loiter.posX = 0;
         loiter.posY = 0;
 #ifdef NAV_FIXED_WING_LANDING        
@@ -311,10 +361,20 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
                 }
                 if (virtualAproach == NAV_RTH_APROACH_LANDING_DECISION || virtualAproach == NAV_RTH_APROACH_LANDING_SAFEALT) {
                     calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS(posControl.rthState.homePosition.yaw + angle), distanceAproach , 0, 0);
+                    if (loiter.distance < navConfig()->fw.loiter_radius * 1.2f) {
+					    posControl.trackType = NAV_TRACK_TYPE_LOITER_LAND;
+						posControl.lastWaypoint.pos.x = loiter.posX;
+					    posControl.lastWaypoint.pos.y = loiter.posY;
+					} else if (posControl.trackType != NAV_TRACK_TYPE_LOITER_LAND) posControl.trackType = NAV_TRACK_TYPE_VIRTUAL;
+                }
+				if (virtualAproach == NAV_RTH_APROACH_LANDING_HOMEYAW) {
+                    posControl.trackType = NAV_TRACK_TYPE_NONE;
                 }
                 if (virtualAproach == NAV_RTH_APROACH_LANDING_RESET || virtualAproach == NAV_RTH_APROACH_LANDING_FINAL) {
                     calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS(posControl.rthState.homePosition.yaw), loiterRadiusTan, 0, 0);
-
+                    posControl.trackType = NAV_TRACK_TYPE_STRAIGHT;
+					posControl.lastWaypoint.pos.x = loiter.posX;
+					posControl.lastWaypoint.pos.y = loiter.posY;
                     float aproach = MIN(loiter.distance - (M_PIf * navConfig()->fw.loiter_radius / 4), 2 * loiterRadiusTan);
                     calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS((posControl.rthState.homePosition.yaw + DEGREES_TO_CENTIDEGREES(180)) % DEGREES_TO_CENTIDEGREES(360)),
                         aproach, loiter.posX, loiter.posY);
@@ -329,6 +389,10 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
                 navConfig()->fw.loiter_radius, loiter.posX, loiter.posY);
         }
     }
+    else {
+        posControl.trackType = NAV_TRACK_TYPE_STRAIGHT;
+    }
+    if (loiter.distance < 50.0f) posControl.trackType = NAV_TRACK_TYPE_NONE;
 
     // Calculate virtual waypoint
     virtualDesiredPosition.x = navGetCurrentActualPositionAndVelocity()->pos.x + loiter.errorX * (trackingDistance / loiter.distance);
@@ -377,9 +441,36 @@ static void updatePositionHeadingController_FW(timeUs_t currentTimeUs, timeDelta
     }
 
     // If forced turn direction flag is enabled we fix the sign of the direction
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 4, navHeadingError);
     if (forceTurnDirection) {
         navHeadingError = loiterDirection() * ABS(navHeadingError);
+        DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 5, 0);
     }
+    else {
+        float trackError = calculateCrossTrackError();
+        trackError = trackError * (rxGetChannelValue(6) - PWM_RANGE_MIN) / (PWM_RANGE_MAX - PWM_RANGE_MIN); //0-15, 6 i -> aux 3
+        DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 5, lrintf(trackError));
+        if (trackError > 0.01f) {
+            int32_t virtualTargetDistance = calculateDistanceToDestination(&virtualDesiredPosition);	
+            int32_t trackErrorAngle = 0; 
+            if (virtualTargetDistance > trackError) trackErrorAngle = RADIANS_TO_CENTIDEGREES(asin_approx(trackError / virtualTargetDistance));
+            DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 6, trackErrorAngle);
+			if (trackErrorAngle > 0) {
+                if (navHeadingError > 0) {
+                    navHeadingError += trackErrorAngle; //navHeadingError = MAX(navHeadingError, -trackErrorAngle);
+                } else {
+                    navHeadingError = MIN(navHeadingError, -trackErrorAngle); //navHeadingError += trackErrorAngle;
+                }
+            } else { //trackErrorAngle <= 0
+                if (navHeadingError > 0) {
+                    navHeadingError = MAX(navHeadingError, -trackErrorAngle); //navHeadingError += trackErrorAngle;
+                } else {
+                    navHeadingError += trackErrorAngle; //navHeadingError = MIN(navHeadingError, -trackErrorAngle);
+                }
+            }
+        }
+    }
+    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 7, navHeadingError);
 
     // Slow error monitoring (2Hz rate)
     if ((currentTimeUs - previousTimeMonitoringUpdate) >= HZ2US(NAV_FW_CONTROL_MONITORING_RATE)) {
