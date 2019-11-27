@@ -1128,6 +1128,8 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_CLIMB_TO_SAFE_ALT(n
             posControl.rthState.rthInitialDistance = posControl.homeDistance;
             fpVector3_t * tmpHomePos = rthGetHomeTargetPosition(RTH_HOME_ENROUTE_INITIAL);
 
+            posControl.lastWaypoint.pos = navGetCurrentActualPositionAndVelocity()->pos;
+
             if (navConfig()->general.flags.rth_tail_first && !STATE(FIXED_WING)) {
                 setDesiredPosition(tmpHomePos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING_TAIL_FIRST);
             }
@@ -1355,6 +1357,8 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_INITIALIZE(nav
         resetAltitudeController(false);
         setupAltitudeController();
 
+        posControl.lastWaypoint.pos = navGetCurrentActualPositionAndVelocity()->pos;
+
         posControl.activeWaypointIndex = 0;
         return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_PRE_ACTION
     }
@@ -1421,6 +1425,8 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(navigationFSMState_t previousState)
 {
     UNUSED(previousState);
+
+    posControl.lastWaypoint.pos = posControl.activeWaypoint.pos;
 
     switch (posControl.waypointList[posControl.activeWaypointIndex].action) {
         case NAV_WP_ACTION_RTH:
