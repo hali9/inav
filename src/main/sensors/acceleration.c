@@ -50,7 +50,6 @@
 #include "drivers/accgyro/accgyro_bmi160.h"
 #include "drivers/accgyro/accgyro_icm20689.h"
 #include "drivers/accgyro/accgyro_fake.h"
-#include "drivers/logging.h"
 #include "drivers/sensor.h"
 
 #include "fc/config.h"
@@ -82,10 +81,8 @@ STATIC_FASTRAM void *accSoftLpfFilter[XYZ_AXIS_COUNT];
 STATIC_FASTRAM pt1Filter_t accVibeFloorFilter[XYZ_AXIS_COUNT];
 STATIC_FASTRAM pt1Filter_t accVibeFilter[XYZ_AXIS_COUNT];
 
-#ifdef USE_ACC_NOTCH
 STATIC_FASTRAM filterApplyFnPtr accNotchFilterApplyFn;
 STATIC_FASTRAM void *accNotchFilter[XYZ_AXIS_COUNT];
-#endif
 
 PG_REGISTER_WITH_RESET_FN(accelerometerConfig_t, accelerometerConfig, PG_ACCELEROMETER_CONFIG, 3);
 
@@ -306,8 +303,6 @@ static bool accDetect(accDev_t *dev, accelerationSensor_e accHardwareToUse)
         accHardware = ACC_NONE;
         break;
     }
-
-    addBootlogEvent6(BOOT_EVENT_ACC_DETECTION, BOOT_EVENT_FLAGS_NONE, accHardware, 0, 0, 0);
 
     if (accHardware == ACC_NONE) {
         return false;
@@ -581,13 +576,11 @@ void accUpdate(void)
         acc.accADCf[axis] = accSoftLpfFilterApplyFn(accSoftLpfFilter[axis], acc.accADCf[axis]);
     }
 
-#ifdef USE_ACC_NOTCH
     if (accelerometerConfig()->acc_notch_hz) {
         for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
             acc.accADCf[axis] = accNotchFilterApplyFn(accNotchFilter[axis], acc.accADCf[axis]);
         }
     }
-#endif
 
 }
 
@@ -668,7 +661,6 @@ void accInitFilters(void)
         pt1FilterInit(&accVibeFilter[axis], ACC_VIBE_FILT_HZ, accDt);
     }
 
-#ifdef USE_ACC_NOTCH
     STATIC_FASTRAM biquadFilter_t accFilterNotch[XYZ_AXIS_COUNT];
     accNotchFilterApplyFn = nullFilterApply;
 
@@ -679,7 +671,6 @@ void accInitFilters(void)
             biquadFilterInitNotch(accNotchFilter[axis], acc.accTargetLooptime, accelerometerConfig()->acc_notch_hz, accelerometerConfig()->acc_notch_cutoff);
         }
     }
-#endif
 
 }
 

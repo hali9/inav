@@ -245,6 +245,21 @@ typedef struct {
     uint8_t flag;
 } navWaypoint_t;
 
+typedef struct radar_pois_s {
+    gpsLocation_t gps;
+    uint8_t state;
+    uint16_t heading; // °
+    uint16_t speed; // cm/s
+    uint8_t lq; // from 0 t o 4
+    uint16_t distance; // m
+    int16_t altitude; // m
+    int16_t direction; // °
+} radar_pois_t;
+
+#define RADAR_MAX_POIS 5
+
+extern radar_pois_t radar_pois[RADAR_MAX_POIS];
+
 typedef struct {
     fpVector3_t pos;
     int32_t     yaw;             // deg * 100
@@ -389,7 +404,7 @@ typedef struct {
 
 float getEstimatedActualVelocity(int axis);
 float getEstimatedActualPosition(int axis);
-int32_t getTotalTravelDistance(void);
+uint32_t getTotalTravelDistance(void);
 void getEstimatedPositionAndVelocity(navPositionAndVelocity_t * pos);
 
 /* Waypoint list access functions */
@@ -401,7 +416,7 @@ void resetWaypointList(void);
 bool loadNonVolatileWaypointList(void);
 bool saveNonVolatileWaypointList(void);
 
-float RTHAltitude(void);
+float getFinalRTHAltitude(void);
 int16_t fixedWingPitchToThrottleCorrection(int16_t pitch);
 
 /* Geodetic functions */
