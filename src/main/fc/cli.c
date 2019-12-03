@@ -1158,6 +1158,62 @@ static void cliRxRange(char *cmdline)
     }
 }
 
+static void printRxAux(uint8_t dumpMask, const int16_t *channelAuxConfigs, const int16_t *defaultChannelAuxConfigs)
+{
+    const char *format = "rxaux %u %d";
+    for (uint8_t i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+        bool equalsDefault = false;
+        if (defaultChannelAuxConfigs) {
+            equalsDefault = channelAuxConfigs[i] == defaultChannelAuxConfigs[i];
+            cliDefaultPrintLinef(dumpMask, equalsDefault, format,
+                i,
+                defaultChannelAuxConfigs[i]
+            );
+        }
+        cliDumpPrintLinef(dumpMask, equalsDefault, format,
+            i,
+            channelAuxConfigs[i]
+        );
+    }
+}
+
+static void cliRxAux(char *cmdline)
+{
+    int i, validArgumentCount = 0;
+    const char *ptr;
+
+    if (isEmpty(cmdline)) {
+	printRxAux(DUMP_MASTER, rxChannelAuxConfigs(0), NULL);
+    } else if (sl_strcasecmp(cmdline, "reset") == 0) {
+	for (int i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+            (*rxChannelAuxConfigsMutable(i)) = 0;
+        }
+    } else {
+        ptr = cmdline;
+        i = fastA2I(ptr);
+        if (i >= 0 && i < MAX_AUX_CHANNEL_COUNT) {
+            int auxValue;
+
+            ptr = nextArg(ptr);
+            if (ptr) {
+                auxValue = fastA2I(ptr);
+                validArgumentCount++;
+            }
+
+            if (validArgumentCount != 1) {
+                cliShowParseError();
+            } else if ((PWM_PULSE_MIN <= auxValue && auxValue <= PWM_PULSE_MAX) || auxValue == 1
+		    || (-PWM_PULSE_MAX <= auxValue && auxValue <= -PWM_PULSE_MIN) || auxValue == 0) {
+                (*rxChannelAuxConfigsMutable(i)) = auxValue;
+            } else {
+                cliShowParseError();
+            }
+        } else {
+            cliShowArgumentRangeError("channel", 0, MAX_AUX_CHANNEL_COUNT - 1);
+        }
+    }
+}
+
 #ifdef USE_TEMPERATURE_SENSOR
 static void printTempSensor(uint8_t dumpMask, const tempSensorConfig_t *tempSensorConfigs, const tempSensorConfig_t *defaultTempSensorConfigs)
 {
@@ -3211,6 +3267,9 @@ static void printConfig(const char *cmdline, bool doDiff)
         cliPrintHashLine("adjrange");
         printAdjustmentRange(dumpMask, adjustmentRanges_CopyArray, adjustmentRanges(0));
 
+	cliPrintHashLine("rxaux");
+        printRxAux(dumpMask, rxChannelAuxConfigs_CopyArray, rxChannelAuxConfigs(0));
+	    
         cliPrintHashLine("rxrange");
         printRxRange(dumpMask, rxChannelRangeConfigs_CopyArray, rxChannelRangeConfigs(0));
 
@@ -3380,6 +3439,7 @@ const clicmd_t cmdTable[] = {
 #if !defined(SKIP_TASK_STATISTICS) && !defined(SKIP_CLI_RESOURCES)
     CLI_COMMAND_DEF("resource", "view currently used resources", NULL, cliResource),
 #endif
+    CLI_COMMAND_DEF("rxaux", "configure rx aux failsafe", NULL, cliRxAux),
     CLI_COMMAND_DEF("rxrange", "configure rx channel ranges", NULL, cliRxRange),
     CLI_COMMAND_DEF("save", "save and reboot", NULL, cliSave),
     CLI_COMMAND_DEF("serial", "configure serial ports", NULL, cliSerial),
