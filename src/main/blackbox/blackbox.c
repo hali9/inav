@@ -65,6 +65,7 @@
 #include "navigation/navigation.h"
 
 #include "rx/rx.h"
+#include "rx/msp_override.h"
 
 #include "sensors/diagnostics.h"
 #include "sensors/acceleration.h"
@@ -297,6 +298,14 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"servo",       5, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
     {"servo",       6, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
     {"servo",       7, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
+    {"servo",       8, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
+    {"servo",       9, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
+    {"servo",       10, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
+    {"servo",       11, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
+    {"servo",       12, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
+    {"servo",       13, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
+    {"servo",       14, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
+    {"servo",       15, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),      .Pencode = ENCODING(SIGNED_VB), CONDITION(SERVOS)},
 
 #ifdef NAV_BLACKBOX
     {"navState",  -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
@@ -360,9 +369,12 @@ static const blackboxSimpleFieldDefinition_t blackboxSlowFields[] = {
     {"hwHealthStatus",        -1, UNSIGNED, PREDICT(0),      ENCODING(UNSIGNED_VB)},
     {"powerSupplyImpedance",  -1, UNSIGNED, PREDICT(0),      ENCODING(UNSIGNED_VB)},
     {"sagCompensatedVBat",    -1, UNSIGNED, PREDICT(0),      ENCODING(UNSIGNED_VB)},
-    {"wind",                   0, SIGNED,   PREDICT(0),      ENCODING(UNSIGNED_VB)},
-    {"wind",                   1, SIGNED,   PREDICT(0),      ENCODING(UNSIGNED_VB)},
-    {"wind",                   2, SIGNED,   PREDICT(0),      ENCODING(UNSIGNED_VB)},
+    {"wind",                   0, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)},
+    {"wind",                   1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)},
+    {"wind",                   2, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)},
+#if defined(USE_RX_MSP) && defined(USE_MSP_RC_OVERRIDE)
+    {"mspOverrideFlags",      -1, UNSIGNED, PREDICT(0),      ENCODING(UNSIGNED_VB)},
+#endif
     {"IMUTemperature",        -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)},
 #ifdef USE_BARO
     {"baroTemperature",       -1, SIGNED,   PREDICT(0),      ENCODING(SIGNED_VB)},
@@ -475,6 +487,9 @@ typedef struct blackboxSlowState_s {
     uint16_t powerSupplyImpedance;
     uint16_t sagCompensatedVBat;
     int16_t wind[XYZ_AXIS_COUNT];
+#if defined(USE_RX_MSP) && defined(USE_MSP_RC_OVERRIDE)
+    uint16_t mspOverrideFlags;
+#endif
     int16_t imuTemperature;
 #ifdef USE_BARO
     int16_t baroTemperature;
@@ -569,7 +584,8 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
     case FLIGHT_LOG_FIELD_CONDITION_NONZERO_PID_D_0:
     case FLIGHT_LOG_FIELD_CONDITION_NONZERO_PID_D_1:
     case FLIGHT_LOG_FIELD_CONDITION_NONZERO_PID_D_2:
-        return pidBank()->pid[condition - FLIGHT_LOG_FIELD_CONDITION_NONZERO_PID_D_0].D != 0;
+        // D output can be set by either the D or the FF term
+        return pidBank()->pid[condition - FLIGHT_LOG_FIELD_CONDITION_NONZERO_PID_D_0].D != 0 || pidBank()->pid[condition - FLIGHT_LOG_FIELD_CONDITION_NONZERO_PID_D_0].FF != 0;
 
     case FLIGHT_LOG_FIELD_CONDITION_MAG:
 #ifdef USE_MAG
@@ -620,7 +636,9 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
 #endif
 
     case FLIGHT_LOG_FIELD_CONDITION_RSSI:
-        return rxConfig()->rssi_channel > 0 || feature(FEATURE_RSSI_ADC);
+        // Assumes blackboxStart() is called after rxInit(), which should be true since
+        // logging can't be started until after all the arming checks take place
+        return getRSSISource() != RSSI_SOURCE_NONE;
 
     case FLIGHT_LOG_FIELD_CONDITION_NOT_LOGGING_EVERY_FRAME:
         return blackboxConfig()->rate_num < blackboxConfig()->rate_denom;
@@ -905,12 +923,12 @@ static void writeInterframe(void)
         arraySubInt32(deltas, blackboxCurrent->fwAltPID, blackboxLast->fwAltPID, 3);
         blackboxWriteSignedVBArray(deltas, 3);
 
-        blackboxWriteSignedVB(blackboxCurrent->fwAltPIDOutput);
+        blackboxWriteSignedVB(blackboxCurrent->fwAltPIDOutput - blackboxLast->fwAltPIDOutput);
 
         arraySubInt32(deltas, blackboxCurrent->fwPosPID, blackboxLast->fwPosPID, 3);
         blackboxWriteSignedVBArray(deltas, 3);
 
-        blackboxWriteSignedVB(blackboxCurrent->fwPosPIDOutput);
+        blackboxWriteSignedVB(blackboxCurrent->fwPosPIDOutput - blackboxLast->fwPosPIDOutput);
 
     }
 
@@ -929,7 +947,7 @@ static void writeInterframe(void)
         arraySubInt32(deltas, blackboxCurrent->mcSurfacePID, blackboxLast->mcSurfacePID, 3);
         blackboxWriteSignedVBArray(deltas, 3);
 
-        blackboxWriteSignedVB(blackboxCurrent->mcSurfacePIDOutput);
+        blackboxWriteSignedVB(blackboxCurrent->mcSurfacePIDOutput - blackboxLast->mcSurfacePIDOutput);
     }
 
     /*
@@ -1071,6 +1089,10 @@ static void writeSlowFrame(void)
 
     blackboxWriteSigned16VBArray(slowHistory.wind, XYZ_AXIS_COUNT);
 
+#if defined(USE_RX_MSP) && defined(USE_MSP_RC_OVERRIDE)
+    blackboxWriteUnsignedVB(slowHistory.mspOverrideFlags);
+#endif
+
     blackboxWriteSignedVB(slowHistory.imuTemperature);
 
 #ifdef USE_BARO
@@ -1113,6 +1135,10 @@ static void loadSlowState(blackboxSlowState_t *slow)
 #endif
     }
 
+#if defined(USE_RX_MSP) && defined(USE_MSP_RC_OVERRIDE)
+    slow->mspOverrideFlags = (IS_RC_MODE_ACTIVE(BOXMSPRCOVERRIDE) ? 2 : 0) + (mspOverrideIsInFailsafe() ? 1 : 0);
+#endif
+
     bool valid_temp;
     valid_temp = getIMUTemperature(&slow->imuTemperature);
     if (!valid_temp) slow->imuTemperature = TEMPERATURE_INVALID_VALUE;
@@ -1123,7 +1149,7 @@ static void loadSlowState(blackboxSlowState_t *slow)
 #endif
 
 #ifdef USE_TEMPERATURE_SENSOR
-    for (uint8_t index; index < MAX_TEMP_SENSORS; ++index) {
+    for (uint8_t index = 0; index < MAX_TEMP_SENSORS; ++index) {
         valid_temp = getSensorTemperature(index, slow->tempSensorTemperature + index);
         if (!valid_temp) slow->tempSensorTemperature[index] = TEMPERATURE_INVALID_VALUE;
     }
@@ -1599,7 +1625,7 @@ static bool blackboxWriteSysinfo(void)
 
         BLACKBOX_PRINT_HEADER_LINE_CUSTOM(
             if (testBlackboxCondition(FLIGHT_LOG_FIELD_CONDITION_VBAT)) {
-                blackboxPrintfHeaderLine("vbat_scale", "%u", batteryMetersConfig()->voltage_scale / 10);
+                blackboxPrintfHeaderLine("vbat_scale", "%u", batteryMetersConfig()->voltage.scale / 10);
             } else {
                 xmitState.headerIndex += 2; // Skip the next two vbat fields too
             }

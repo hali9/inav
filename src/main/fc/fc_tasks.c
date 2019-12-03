@@ -27,6 +27,7 @@
 #include "common/color.h"
 #include "common/utils.h"
 #include "common/logic_condition.h"
+#include "common/global_functions.h"
 
 #include "drivers/accgyro/accgyro.h"
 #include "drivers/compass/compass.h"
@@ -153,8 +154,6 @@ void taskUpdateCompass(timeUs_t currentTimeUs)
 #ifdef USE_BARO
 void taskUpdateBaro(timeUs_t currentTimeUs)
 {
-    UNUSED(currentTimeUs);
-
     if (!sensors(SENSOR_BARO)) {
         return;
     }
@@ -203,7 +202,7 @@ void taskUpdateRangefinder(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
 void taskUpdateOpticalFlow(timeUs_t currentTimeUs)
 {
     if (!sensors(SENSOR_OPFLOW))
@@ -314,9 +313,6 @@ void fcTasksInit(void)
 #ifdef USE_PWM_SERVO_DRIVER
     setTaskEnabled(TASK_PWMDRIVER, feature(FEATURE_PWM_SERVO_DRIVER));
 #endif
-#ifdef USE_OSD
-    setTaskEnabled(TASK_OSD, feature(FEATURE_OSD));
-#endif
 #ifdef USE_CMS
 #ifdef USE_MSP_DISPLAYPORT
     setTaskEnabled(TASK_CMS, true);
@@ -324,7 +320,7 @@ void fcTasksInit(void)
     setTaskEnabled(TASK_CMS, feature(FEATURE_OSD) || feature(FEATURE_DASHBOARD));
 #endif
 #endif
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
     setTaskEnabled(TASK_OPFLOW, sensors(SENSOR_OPFLOW));
 #endif
 #ifdef USE_VTX_CONTROL
@@ -340,6 +336,9 @@ void fcTasksInit(void)
 #endif
 #ifdef USE_LOGIC_CONDITIONS
     setTaskEnabled(TASK_LOGIC_CONDITIONS, true);
+#endif
+#ifdef USE_GLOBAL_FUNCTIONS
+    setTaskEnabled(TASK_GLOBAL_FUNCTIONS, true);
 #endif
 }
 
@@ -511,7 +510,7 @@ cfTask_t cfTasks[TASK_COUNT] = {
     },
 #endif
 
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
     [TASK_OPFLOW] = {
         .taskName = "OPFLOW",
         .taskFunc = taskUpdateOpticalFlow,
@@ -550,6 +549,14 @@ cfTask_t cfTasks[TASK_COUNT] = {
     [TASK_LOGIC_CONDITIONS] = {
         .taskName = "LOGIC",
         .taskFunc = logicConditionUpdateTask,
+        .desiredPeriod = TASK_PERIOD_HZ(10),          // 10Hz @100msec
+        .staticPriority = TASK_PRIORITY_IDLE,
+    },
+#endif
+#ifdef USE_GLOBAL_FUNCTIONS
+    [TASK_GLOBAL_FUNCTIONS] = {
+        .taskName = "G_FNK",
+        .taskFunc = globalFunctionsUpdateTask,
         .desiredPeriod = TASK_PERIOD_HZ(10),          // 10Hz @100msec
         .staticPriority = TASK_PRIORITY_IDLE,
     },

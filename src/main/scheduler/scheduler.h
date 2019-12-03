@@ -98,7 +98,7 @@ typedef enum {
 #ifdef USE_CMS
     TASK_CMS,
 #endif
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
     TASK_OPFLOW,
 #endif
 #ifdef USE_UAV_INTERCONNECT
@@ -112,6 +112,9 @@ typedef enum {
 #endif
 #ifdef USE_LOGIC_CONDITIONS
     TASK_LOGIC_CONDITIONS,
+#endif
+#ifdef USE_GLOBAL_FUNCTIONS
+    TASK_GLOBAL_FUNCTIONS,
 #endif
     /* Count of real tasks */
     TASK_COUNT,
