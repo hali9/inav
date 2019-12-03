@@ -1371,9 +1371,9 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_PRE_ACTION(nav
             posControl.wpInitialDistance = calculateDistanceToDestination(&posControl.activeWaypoint.pos);
             posControl.wpInitialAltitude = posControl.actualState.abs.pos.z;
             if (posControl.activeWaypointIndex == 0)
-                posControl.lastWaypoint.yaw = posControl.actualState.yaw;
+                posControl.wpInitialYaw = posControl.actualState.yaw;
             else
-                posControl.lastWaypoint.yaw = ABS(posControl.waypointList[posControl.activeWaypointIndex].p3) * 100;
+                posControl.wpInitialYaw = ABS(posControl.waypointList[posControl.activeWaypointIndex-1].p3) * 100;
             
             return NAV_FSM_EVENT_SUCCESS;       // will switch to NAV_STATE_WAYPOINT_IN_PROGRESS
 
@@ -1409,11 +1409,11 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
                         setDesiredPosition(&tmpWaypoint, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING);
                     } else {
                         int32_t activeYaw = ABS(posControl.waypointList[posControl.activeWaypointIndex].p3) * 100;
-                        int32_t angle = activeYaw - posControl.lastWaypoint.yaw;
-                        if (posControl.lastWaypoint.yaw > activeYaw && posControl.waypointList[posControl.activeWaypointIndex].p3 > 0) angle += 36000;
-                        if (activeYaw > posControl.lastWaypoint.yaw && posControl.waypointList[posControl.activeWaypointIndex].p3 < 0) angle -= 36000;
+                        int32_t angle = activeYaw - posControl.wpInitialYaw;
+                        if (posControl.wpInitialYaw > activeYaw && posControl.waypointList[posControl.activeWaypointIndex].p3 > 0) angle += 36000;
+                        if (activeYaw > posControl.wpInitialYaw && posControl.waypointList[posControl.activeWaypointIndex].p3 < 0) angle -= 36000;
                         int32_t head = scaleRange(constrainf(posControl.wpDistance, 0, posControl.wpInitialDistance),
-                             posControl.wpInitialDistance, 0, 0, angle) + posControl.lastWaypoint.yaw;
+                             posControl.wpInitialDistance, 0, 0, angle) + posControl.wpInitialYaw;
                         setDesiredPosition(&tmpWaypoint, wrap_36000(head), NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING);
                     }
                     return NAV_FSM_EVENT_NONE;      // will re-process state in >10ms
