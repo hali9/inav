@@ -357,6 +357,7 @@ typedef struct {
     float                       wpInitialAltitude; // Altitude at start of WP
     float                       wpInitialDistance; // Distance when starting flight to WP
     float                       wpDistance;        // Distance to active WP
+    int32_t                     wpInitialYaw; 
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];
