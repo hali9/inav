@@ -357,6 +357,7 @@ typedef struct {
     float                       wpInitialAltitude; // Altitude at start of WP
     float                       wpInitialDistance; // Distance when starting flight to WP
     float                       wpDistance;        // Distance to active WP
+    int32_t                     wpInitialYaw; 
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];
@@ -378,6 +379,7 @@ void navPidReset(pidController_t *pid);
 void navPidInit(pidController_t *pid, float _kP, float _kI, float _kD, float _kFF, float _dTermLpfHz);
 
 bool isThrustFacingDownwards(void);
+uint32_t calculateDistance(const fpVector3_t * fromPos, const fpVector3_t * toPos);
 uint32_t calculateDistanceToDestination(const fpVector3_t * destinationPos);
 int32_t calculateBearingToDestination(const fpVector3_t * destinationPos);
 void resetLandingDetector(void);
