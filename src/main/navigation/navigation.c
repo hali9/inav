@@ -1355,9 +1355,6 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_INITIALIZE(nav
         resetAltitudeController(false);
         setupAltitudeController();
 
-        posControl.lastWaypoint.pos = navGetCurrentActualPositionAndVelocity()->pos;
-        posControl.lastWaypoint.yaw = posControl.actualState.yaw;
-
         posControl.activeWaypointIndex = 0;
         return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_PRE_ACTION
     }
@@ -1373,6 +1370,11 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_PRE_ACTION(nav
             calculateAndSetActiveWaypoint(&posControl.waypointList[posControl.activeWaypointIndex]);
             posControl.wpInitialDistance = calculateDistanceToDestination(&posControl.activeWaypoint.pos);
             posControl.wpInitialAltitude = posControl.actualState.abs.pos.z;
+            if (posControl.activeWaypointIndex == 0)
+                posControl.lastWaypoint.yaw = posControl.actualState.yaw;
+            else
+                posControl.lastWaypoint.yaw = ABS(posControl.waypointList[posControl.activeWaypointIndex].p3) * 100;
+            
             return NAV_FSM_EVENT_SUCCESS;       // will switch to NAV_STATE_WAYPOINT_IN_PROGRESS
 
         case NAV_WP_ACTION_RTH:
@@ -1442,9 +1444,6 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(navigationFSMState_t previousState)
 {
     UNUSED(previousState);
-
-    posControl.lastWaypoint.pos = posControl.activeWaypoint.pos;
-    posControl.lastWaypoint.yaw = ABS(posControl.waypointList[posControl.activeWaypointIndex].p3) * 100;
 
     switch (posControl.waypointList[posControl.activeWaypointIndex].action) {
         case NAV_WP_ACTION_RTH:
@@ -2013,14 +2012,6 @@ static uint32_t calculateDistanceFromDelta(float deltaX, float deltaY)
 static int32_t calculateBearingFromDelta(float deltaX, float deltaY)
 {
     return wrap_36000(RADIANS_TO_CENTIDEGREES(atan2_approx(deltaY, deltaX)));
-}
-
-uint32_t calculateDistance(const fpVector3_t * fromPos, const fpVector3_t * toPos)
-{
-    const float deltaX = fromPos->x - toPos->x;
-    const float deltaY = fromPos->y - toPos->y;
-
-    return calculateDistanceFromDelta(deltaX, deltaY);
 }
 
 uint32_t calculateDistanceToDestination(const fpVector3_t * destinationPos)
