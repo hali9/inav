@@ -361,6 +361,10 @@ typedef struct {
 
     navWaypointPosition_t       activeWaypoint;     // Local position and initial bearing, filled on waypoint activation
     int8_t                      activeWaypointIndex;
+    float                       wpInitialAltitude; // Altitude at start of WP
+    float                       wpInitialDistance; // Distance when starting flight to WP
+    float                       wpDistance;        // Distance to active WP
+    int32_t                     wpInitialYaw; 
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];

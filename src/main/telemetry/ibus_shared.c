@@ -229,7 +229,7 @@ static uint8_t dispatchMeasurementRequest(ibusAddress_t address) {
         return sendIbusMeasurement2(address, 0);
     } else if (SENSOR_ADDRESS_TYPE_LOOKUP[address].value == IBUS_MEAS_VALUE_GPS_STATUS) { //GPS_STATUS fix sat
 #if defined(USE_GPS)
-        if (sensors(SENSOR_GPS)) return sendIbusMeasurement2(address, (((uint16_t)fix)<<8) + gpsSol.numSat); else //uint8_t, uint8_t
+        if (sensors(SENSOR_GPS)) return sendIbusMeasurement2(address, (((uint16_t)(fix * 10 + constrain(gpsSol.eph / 1000, 0, 9)))<<8) + gpsSol.numSat); else //uint8_t, uint8_t
 #endif
         return sendIbusMeasurement2(address, 0);
     } else if (SENSOR_ADDRESS_TYPE_LOOKUP[address].value == IBUS_MEAS_VALUE_GPS_LAT) { //4byte

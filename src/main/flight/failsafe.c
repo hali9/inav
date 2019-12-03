@@ -297,6 +297,9 @@ void failsafeApplyControlInput(void)
                 break;
         }
     }
+
+	//Apply aux values
+    applyAuxChannelsOnFailsafe();
 }
 
 bool failsafeIsReceivingRxData(void)
