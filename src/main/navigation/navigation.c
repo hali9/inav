@@ -868,7 +868,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_ALTHOLD_INITIALIZE(navi
 
     if (((prevFlags & NAV_CTL_ALT) == 0) || ((prevFlags & NAV_AUTO_RTH) != 0) || ((prevFlags & NAV_AUTO_WP) != 0) || terrainFollowingToggled) {
         setupAltitudeController();
-        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_Z);  // This will reset surface offset
+        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, 0, NAV_POS_UPDATE_Z);  // This will reset surface offset
     }
 
     return NAV_FSM_EVENT_SUCCESS;
@@ -880,7 +880,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_ALTHOLD_IN_PROGRESS(nav
 
     // If GCS was disabled - reset altitude setpoint
     if (posControl.flags.isGCSAssistedNavigationReset) {
-        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_Z);
+        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, 0, NAV_POS_UPDATE_Z);
         resetGCSFlags();
     }
 
@@ -904,13 +904,13 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_POSHOLD_3D_INITIALIZE(n
     }
 
     if (((prevFlags & NAV_CTL_ALT) == 0) || ((prevFlags & NAV_AUTO_RTH) != 0) || ((prevFlags & NAV_AUTO_WP) != 0) || terrainFollowingToggled) {
-        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_Z);  // This will reset surface offset
+        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, 0, NAV_POS_UPDATE_Z);  // This will reset surface offset
     }
 
     if ((previousState != NAV_STATE_RTH_HOVER_PRIOR_TO_LANDING) && (previousState != NAV_STATE_RTH_HOVER_ABOVE_HOME) && (previousState != NAV_STATE_RTH_LANDING)) {
         fpVector3_t targetHoldPos;
         calculateInitialHoldPosition(&targetHoldPos);
-        setDesiredPosition(&targetHoldPos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING);
+        setDesiredPosition(&targetHoldPos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING); //
     }
 
     return NAV_FSM_EVENT_SUCCESS;
@@ -924,8 +924,8 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_POSHOLD_3D_IN_PROGRESS(
     if (posControl.flags.isGCSAssistedNavigationReset) {
         fpVector3_t targetHoldPos;
         calculateInitialHoldPosition(&targetHoldPos);
-        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_Z);
-        setDesiredPosition(&targetHoldPos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING);
+        setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, 0, NAV_POS_UPDATE_Z);
+        setDesiredPosition(&targetHoldPos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING); //
         resetGCSFlags();
     }
 
@@ -946,7 +946,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_CRUISE_2D_INITIALIZE(na
         resetPositionController();
     }
 
-    posControl.cruise.yaw = posControl.actualState.yaw; // Store the yaw to follow
+    posControl.cruise.yaw = gpsSol.groundCourse; // Store the yaw to follow
     posControl.cruise.previousYaw = posControl.cruise.yaw;
     posControl.cruise.lastYawAdjustmentTime = 0;
 
@@ -1004,7 +1004,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_CRUISE_2D_ADJUSTING(nav
 
     // User is rolling, changing manually direction. Wait until it is done and then restore CRUISE
     if (posControl.flags.isAdjustingPosition) {
-        posControl.cruise.yaw = posControl.actualState.yaw; //store current heading
+        posControl.cruise.yaw = gpsSol.groundCourse; //store current heading
         posControl.cruise.lastYawAdjustmentTime = millis();
         return NAV_FSM_EVENT_NONE;  // reprocess the state
     }
@@ -1068,8 +1068,8 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_INITIALIZE(navigati
 
         // If close to home - reset home position and land
         if (posControl.homeDistance < navConfig()->general.min_rth_distance) {
-            setHomePosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL);
-            setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING);
+            setHomePosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING, NAV_HOME_VALID_ALL); //
+            setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING); //
 
             return NAV_FSM_EVENT_SWITCH_TO_RTH_LANDING;   // NAV_STATE_RTH_HOVER_PRIOR_TO_LANDING
         }
@@ -1078,7 +1078,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_INITIALIZE(navigati
 
             if (STATE(FIXED_WING)) {
                 // Airplane - climbout before turning around
-                calculateFarAwayTarget(&targetHoldPos, posControl.actualState.yaw, 100000.0f);  // 1km away
+                calculateFarAwayTarget(&targetHoldPos, gpsSol.groundCourse, 100000.0f);  // 1km away
             } else {
                 // Multicopter, hover and climb
                 calculateInitialHoldPosition(&targetHoldPos);
@@ -1088,7 +1088,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_INITIALIZE(navigati
                 initializeRTHSanityChecker(&targetHoldPos);
             }
 
-            setDesiredPosition(&targetHoldPos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING);
+            setDesiredPosition(&targetHoldPos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING); //
 
             return NAV_FSM_EVENT_SUCCESS;   // NAV_STATE_RTH_CLIMB_TO_SAFE_ALT
         }
@@ -1226,7 +1226,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_HOVER_PRIOR_TO_LAND
             return navigationRTHAllowsLanding() ? NAV_FSM_EVENT_SUCCESS : NAV_FSM_EVENT_SWITCH_TO_RTH_HOVER_ABOVE_HOME;
         }
         else {
-            if (ABS(wrap_18000(posControl.rthState.homePosition.yaw - posControl.actualState.yaw)) < DEGREES_TO_CENTIDEGREES(15)) {
+            if (ABS(wrap_18000(posControl.rthState.homePosition.yaw - posControl.actualState.yaw)) < DEGREES_TO_CENTIDEGREES(15)) { //ok not wing
                 resetLandingDetector();
                 updateClimbRateToAltitudeController(0, ROC_TO_ALT_RESET);
                 return navigationRTHAllowsLanding() ? NAV_FSM_EVENT_SUCCESS : NAV_FSM_EVENT_SWITCH_TO_RTH_HOVER_ABOVE_HOME;
@@ -1957,7 +1957,7 @@ void updateActualHeading(bool headingValid, int32_t newHeading)
         // Home was stored using the fake heading (assuming boot as 0deg). Calculate
         // the offset from the fake to the actual yaw and apply the same rotation
         // to the home point.
-        int32_t fakeToRealYawOffset = newHeading - posControl.actualState.yaw;
+        int32_t fakeToRealYawOffset = newHeading - posControl.actualState.yaw; //ok
 
         posControl.rthState.homePosition.yaw += fakeToRealYawOffset;
         if (posControl.rthState.homePosition.yaw < 0) {
@@ -1968,7 +1968,7 @@ void updateActualHeading(bool headingValid, int32_t newHeading)
         }
         posControl.rthState.homeFlags |= NAV_HOME_VALID_HEADING;
     }
-    posControl.actualState.yaw = newHeading;
+    posControl.actualState.yaw = newHeading; //ok
     posControl.flags.estHeadingStatus = newEstHeading;
 
     /* Precompute sin/cos of yaw angle */
@@ -2246,7 +2246,7 @@ void updateHomePosition(void)
                     break;
             }
             if (setHome) {
-                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, navigationActualStateHomeValidity());
+                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING, navigationActualStateHomeValidity()); //
             }
         }
     }
@@ -2257,7 +2257,7 @@ void updateHomePosition(void)
         if (IS_RC_MODE_ACTIVE(BOXHOMERESET)) {
             if (isHomeResetAllowed && !FLIGHT_MODE(FAILSAFE_MODE) && !FLIGHT_MODE(NAV_RTH_MODE) && !FLIGHT_MODE(NAV_WP_MODE) && (posControl.flags.estPosStatus >= EST_USABLE)) {
                 const navSetWaypointFlags_t homeUpdateFlags = STATE(GPS_FIX_HOME) ? (NAV_POS_UPDATE_XY | NAV_POS_UPDATE_HEADING) : (NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_HEADING);
-                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, homeUpdateFlags, navigationActualStateHomeValidity());
+                setHomePosition(&posControl.actualState.abs.pos, posControl.actualState.yaw, homeUpdateFlags, navigationActualStateHomeValidity()); //
                 isHomeResetAllowed = false;
             }
         }
