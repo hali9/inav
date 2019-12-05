@@ -314,7 +314,7 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
     float loiterRadiusTan = (navConfig()->fw.loiter_radius / TAN_15DEG);
     if (virtualAproach > NAV_RTH_APROACH_LANDING_DECISION)
         loiterRadiusTan += navConfig()->fw.land_aproach_distance - navConfig()->fw.loiter_radius;
-    bool needToCalculateCircularLoiter = isApproachingLastWaypoint()
+    bool needToCalculateCircularLoiter = (isApproachingLastWaypoint() || isWaypointWait())
                                             && (loiter.distance <= loiterRadiusTan)
                                             && (loiter.distance > 50.0f)
                                             && !FLIGHT_MODE(NAV_CRUISE_MODE);

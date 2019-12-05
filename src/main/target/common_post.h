@@ -49,7 +49,6 @@
 #endif
 
 #ifdef STM32F3
-#undef USE_WIND_ESTIMATOR
 #undef USE_SERIALRX_SUMD
 #undef USE_SERIALRX_SUMH
 #undef USE_SERIALRX_XBUS
