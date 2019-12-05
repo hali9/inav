@@ -293,7 +293,7 @@ static void updatePositionHeadingController_FW(timeUs_t currentTimeUs, timeDelta
     int32_t virtualTargetBearing = calculateBearingToDestination(&virtualDesiredPosition);
 
     // Calculate NAV heading error
-    navHeadingError = wrap_18000(virtualTargetBearing - posControl.actualState.yaw);
+    navHeadingError = wrap_18000(virtualTargetBearing - gpsSol.groundCourse);
 
     // Forced turn direction
     // If heading error is close to 180 deg we initiate forced turn and only disable it when heading error goes below 90 deg
@@ -323,7 +323,7 @@ static void updatePositionHeadingController_FW(timeUs_t currentTimeUs, timeDelta
     const pidControllerFlags_e pidFlags = PID_DTERM_FROM_ERROR | (errorIsDecreasing ? PID_SHRINK_INTEGRATOR : 0);
 
     // Input error in (deg*100), output roll angle (deg*100)
-    float rollAdjustment = navPidApply2(&posControl.pids.fw_nav, posControl.actualState.yaw + navHeadingError, posControl.actualState.yaw, US2S(deltaMicros),
+    float rollAdjustment = navPidApply2(&posControl.pids.fw_nav, gpsSol.groundCourse + navHeadingError, gpsSol.groundCourse, US2S(deltaMicros),
                                        -DEGREES_TO_CENTIDEGREES(navConfig()->fw.max_bank_angle),
                                         DEGREES_TO_CENTIDEGREES(navConfig()->fw.max_bank_angle),
                                         pidFlags);
@@ -556,7 +556,7 @@ void calculateFixedWingInitialHoldPosition(fpVector3_t * pos)
 
 void resetFixedWingHeadingController(void)
 {
-    updateHeadingHoldTarget(CENTIDEGREES_TO_DEGREES(posControl.actualState.yaw));
+    updateHeadingHoldTarget(CENTIDEGREES_TO_DEGREES(gpsSol.groundCourse));
 }
 
 void applyFixedWingNavigationController(navigationFSMStateFlags_t navStateFlags, timeUs_t currentTimeUs)
@@ -578,7 +578,7 @@ void applyFixedWingNavigationController(navigationFSMStateFlags_t navStateFlags,
                 if (getMotorStatus() == MOTOR_STOPPED_USER) {
                     // Motor has been stopped by user. Update target altitude and bypass navigation pitch/throttle control
                     resetFixedWingAltitudeController();
-                    setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, posControl.actualState.yaw, NAV_POS_UPDATE_Z);
+                    setDesiredPosition(&navGetCurrentActualPositionAndVelocity()->pos, 0, NAV_POS_UPDATE_Z);
                 } else
                     applyFixedWingAltitudeAndThrottleController(currentTimeUs);
             }
