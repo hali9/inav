@@ -320,7 +320,7 @@ enum {
     NAV_TRACK_TYPE_LOITER_LAND = 2,
     NAV_TRACK_TYPE_STRAIGHT = 3,
     NAV_TRACK_TYPE_VIRTUAL = 4,
-}
+};
 
 typedef struct {
     /* Flags and navigation system state */
@@ -363,7 +363,7 @@ typedef struct {
     navWaypointPosition_t       activeWaypoint;     // Local position and initial bearing, filled on waypoint activation
     int8_t                      activeWaypointIndex;
 
-    navWaypointPosition_t       lastWaypoint;
+    fpVector3_t                 wpInitialPos;
     uint8_t                     trackType;
 
     /* Internals & statistics */
