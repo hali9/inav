@@ -65,6 +65,13 @@ typedef enum {
     NAV_HOME_VALID_ALL = NAV_HOME_VALID_XY | NAV_HOME_VALID_Z | NAV_HOME_VALID_HEADING,
 } navigationHomeFlags_t;
 
+typedef enum {
+    NAV_HOME_MIN_RTH = 0, //actual yaw, always
+    NAV_HOME_DISARM = 1, //actual yaw, navigationActualStateHomeValidity
+    NAV_HOME_RESET = 2, //actual yaw, navigationActualStateHomeValidity
+    NAV_HOME_WP = 3, //0 always
+} navigationHomeReason_t;
+
 typedef struct navigationFlags_s {
     bool horizontalPositionDataNew;
     bool verticalPositionDataNew;
@@ -121,6 +128,14 @@ typedef struct {
     int32_t     yaw;
 } navigationDesiredState_t;
 
+typedef struct {
+    float posX;
+    float posY;
+    float errorX;
+    float errorY;
+    float distance;
+} loiter_t;
+
 typedef enum {
     NAV_FSM_EVENT_NONE = 0,
     NAV_FSM_EVENT_TIMEOUT,
@@ -169,7 +184,8 @@ typedef enum {
     NAV_PERSISTENT_ID_RTH_CLIMB_TO_SAFE_ALT                     = 9,
     NAV_PERSISTENT_ID_RTH_HEAD_HOME                             = 10,
     NAV_PERSISTENT_ID_RTH_HOVER_PRIOR_TO_LANDING                = 11,
-    NAV_PERSISTENT_ID_RTH_HOVER_ABOVE_HOME                      = 29,
+    NAV_PERSISTENT_ID_RTH_WAIT_ABOVE_HOME                       = 37,
+    NAV_PERSISTENT_ID_RTH_HOVER_ABOVE_HOME                      = 35,
     NAV_PERSISTENT_ID_RTH_LANDING                               = 12,
     NAV_PERSISTENT_ID_RTH_FINISHING                             = 13,
     NAV_PERSISTENT_ID_RTH_FINISHED                              = 14,
@@ -177,6 +193,7 @@ typedef enum {
     NAV_PERSISTENT_ID_WAYPOINT_INITIALIZE                       = 15,
     NAV_PERSISTENT_ID_WAYPOINT_PRE_ACTION                       = 16,
     NAV_PERSISTENT_ID_WAYPOINT_IN_PROGRESS                      = 17,
+    NAV_PERSISTENT_ID_WAYPOINT_WAIT                             = 36,
     NAV_PERSISTENT_ID_WAYPOINT_REACHED                          = 18,
     NAV_PERSISTENT_ID_WAYPOINT_NEXT                             = 19,
     NAV_PERSISTENT_ID_WAYPOINT_FINISHED                         = 20,
@@ -215,6 +232,7 @@ typedef enum {
     NAV_STATE_RTH_CLIMB_TO_SAFE_ALT,
     NAV_STATE_RTH_HEAD_HOME,
     NAV_STATE_RTH_HOVER_PRIOR_TO_LANDING,
+    NAV_STATE_RTH_WAIT_ABOVE_HOME,
     NAV_STATE_RTH_HOVER_ABOVE_HOME,
     NAV_STATE_RTH_LANDING,
     NAV_STATE_RTH_FINISHING,
@@ -223,6 +241,7 @@ typedef enum {
     NAV_STATE_WAYPOINT_INITIALIZE,
     NAV_STATE_WAYPOINT_PRE_ACTION,
     NAV_STATE_WAYPOINT_IN_PROGRESS,
+    NAV_STATE_WAYPOINT_WAIT,
     NAV_STATE_WAYPOINT_REACHED,
     NAV_STATE_WAYPOINT_NEXT,
     NAV_STATE_WAYPOINT_FINISHED,
@@ -314,6 +333,14 @@ typedef enum {
     RTH_HOME_FINAL_LAND,            // Home position and altitude
 } rthTargetMode_e;
 
+enum {
+    NAV_TRACK_TYPE_NONE = 0,
+    NAV_TRACK_TYPE_LOITER = 1,
+    NAV_TRACK_TYPE_LOITER_LAND = 2,
+    NAV_TRACK_TYPE_STRAIGHT = 3,
+    NAV_TRACK_TYPE_VIRTUAL = 4,
+}
+
 typedef struct {
     /* Flags and navigation system state */
     navigationFSMState_t        navState;
@@ -354,10 +381,13 @@ typedef struct {
 
     navWaypointPosition_t       activeWaypoint;     // Local position and initial bearing, filled on waypoint activation
     int8_t                      activeWaypointIndex;
+    uint32_t                    lastWaypointReachedAt;
     float                       wpInitialAltitude; // Altitude at start of WP
     float                       wpInitialDistance; // Distance when starting flight to WP
     float                       wpDistance;        // Distance to active WP
     int32_t                     wpInitialYaw; 
+    navWaypointPosition_t       lastWaypoint; 
+    uint8_t                     trackType;
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];
@@ -386,7 +416,7 @@ bool isLandingDetected(void);
 
 navigationFSMStateFlags_t navGetCurrentStateFlags(void);
 
-void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags);
+void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags, navigationHomeReason_t reason);
 void setDesiredPosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask);
 void setDesiredSurfaceOffset(float surfaceOffset);
 void setDesiredPositionToFarAwayTarget(int32_t yaw, int32_t distance, navSetWaypointFlags_t useMask);
@@ -394,6 +424,7 @@ void updateClimbRateToAltitudeController(float desiredClimbRate, climbRateToAlti
 
 bool isWaypointReached(const navWaypointPosition_t * waypoint, const bool isWaypointHome);
 bool isWaypointMissed(const navWaypointPosition_t * waypoint);
+bool isWaypointWait(void);
 bool isApproachingLastWaypoint(void);
 float getActiveWaypointSpeed(void);
 

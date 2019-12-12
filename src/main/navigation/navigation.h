@@ -87,7 +87,10 @@ typedef enum {
 typedef enum {
     NAV_RTH_ALLOW_LANDING_NEVER = 0,
     NAV_RTH_ALLOW_LANDING_ALWAYS = 1,
-    NAV_RTH_ALLOW_LANDING_FS_ONLY = 2, // Allow landing only if RTH was triggered by failsafe
+    NAV_RTH_ALLOW_LANDING_FS_ONLY = 2,     // Allow landing only if RTH was triggered by failsafe
+    NAV_RTH_ALLOW_LANDING_APROACH = 3,     // Always landing with aproach
+    NAV_RTH_ALLOW_LANDING_FS_ONLY_APR = 4, // Allow landing with aproach only if RTH was triggered by failsafe
+    NAV_RTH_ALLOW_LANDING_FS_NO_APR = 5,   // Allow landing with aproach, but if RTH was triggered by failsafe land without aproach
 } navRTHAllowLanding_e;
 
 typedef enum {
@@ -102,6 +105,16 @@ typedef enum {
     NAV_ARMING_BLOCKER_NAV_IS_ALREADY_ACTIVE = 2,
     NAV_ARMING_BLOCKER_FIRST_WAYPOINT_TOO_FAR = 3,
 } navArmingBlocker_e;
+
+typedef enum {
+    NAV_RTH_APROACH_LANDING_ABOVE_MAXALT = 0, // 0-alt>maxAlt
+    NAV_RTH_APROACH_LANDING_MAXALT = 1,       // 1-alt=maxAlt, angle<>(homeYaw+angle in decision point)
+    NAV_RTH_APROACH_LANDING_DECISION = 2,     // 2-alt=maxAlt, angle=(homeYaw+angle in decision point)
+    NAV_RTH_APROACH_LANDING_SAFEALT = 3,      // 3-alt=safeAlt, angle<>homeYaw
+    NAV_RTH_APROACH_LANDING_HOMEYAW = 4,      // 4-alt=safeAlt, angle=homeYaw
+    NAV_RTH_APROACH_LANDING_RESET = 5,        // 5-reset alt
+    NAV_RTH_APROACH_LANDING_FINAL = 6,        // 6-final aproach
+} navRTHAproachLanding_e;
 
 typedef struct positionEstimationConfig_s {
     uint8_t automatic_mag_declination;
@@ -168,6 +181,7 @@ typedef struct navConfig_s {
         uint16_t emerg_descent_rate;            // emergency landing descent rate
         uint16_t rth_altitude;                  // altitude to maintain when RTH is active (depends on rth_alt_control_mode) (cm)
         uint16_t rth_home_altitude;             // altitude to go to during RTH after the craft reached home (cm)
+        uint16_t rth_home_wait;                 // time to wait to during RTH after the craft reached home (s)
         uint16_t min_rth_distance;              // 0 Disables. Minimal distance for RTH in cm, otherwise it will just autoland
         uint16_t rth_abort_threshold;           // Initiate emergency landing if during RTH we get this much [cm] away from home
         uint16_t max_terrain_follow_altitude;   // Max altitude to be used in SURFACE TRACKING mode
@@ -200,6 +214,10 @@ typedef struct navConfig_s {
         uint8_t  pitch_to_throttle;          // Pitch angle (in deg) to throttle gain (in 1/1000's of throttle) (*10)
         uint16_t loiter_radius;              // Loiter radius when executing PH on a fixed wing
         int8_t land_dive_angle;
+        uint16_t land_safe_alt;              // Height from which the last approach is made
+        uint16_t land_motor_off_alt;         // Height of engine shutdown
+        uint16_t land_aproach_distance;      // Distance of final aproach
+        uint16_t land_distance;              // Distance from home point to touch down
         uint16_t launch_velocity_thresh;     // Velocity threshold for swing launch detection
         uint16_t launch_accel_thresh;        // Acceleration threshold for launch detection (cm/s/s)
         uint16_t launch_time_thresh;         // Time threshold for launch detection (ms)
@@ -229,7 +247,8 @@ typedef struct gpsOrigin_s {
 
 typedef enum {
     NAV_WP_ACTION_WAYPOINT = 0x01,
-    NAV_WP_ACTION_RTH      = 0x04
+    NAV_WP_ACTION_RTH      = 0x04,
+    NAV_WP_ACTION_RELATIVE = 0x09
 } navWaypointActions_e;
 
 typedef enum {
@@ -326,7 +345,7 @@ typedef enum {
     MW_NAV_STATE_WP_ENROUTE,              // WP Enroute
     MW_NAV_STATE_PROCESS_NEXT,            // Process next
     MW_NAV_STATE_DO_JUMP,                 // Jump
-    MW_NAV_STATE_LAND_START,              // Start Land (unused)
+    MW_NAV_STATE_LAND_START,              // RTH wait
     MW_NAV_STATE_LAND_IN_PROGRESS,        // Land in Progress
     MW_NAV_STATE_LANDED,                  // Landed
     MW_NAV_STATE_LAND_SETTLE,             // Settling before land
@@ -413,7 +432,7 @@ bool isWaypointListValid(void);
 void getWaypoint(uint8_t wpNumber, navWaypoint_t * wpData);
 void setWaypoint(uint8_t wpNumber, const navWaypoint_t * wpData);
 void resetWaypointList(void);
-bool loadNonVolatileWaypointList(void);
+bool loadNonVolatileWaypointList(bool checkRelativeCalculate);
 bool saveNonVolatileWaypointList(void);
 
 float getFinalRTHAltitude(void);
