@@ -953,6 +953,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_CRUISE_2D_INITIALIZE(na
     posControl.cruise.yaw = posControl.actualState.yaw; // Store the yaw to follow
     posControl.cruise.previousYaw = posControl.cruise.yaw;
     posControl.cruise.lastYawAdjustmentTime = 0;
+    posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
 
     return NAV_FSM_EVENT_SUCCESS; // Go to CRUISE_XD_IN_PROGRESS state
 }
@@ -979,6 +980,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_CRUISE_2D_IN_PROGRESS(n
         posControl.cruise.yaw = wrap_36000(posControl.cruise.yaw - centidegsPerIteration);
         DEBUG_SET(DEBUG_CRUISE, 1, CENTIDEGREES_TO_DEGREES(posControl.cruise.yaw));
         posControl.cruise.lastYawAdjustmentTime = currentTimeMs;
+        posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
     }
 
     if (currentTimeMs - posControl.cruise.lastYawAdjustmentTime > 4000)
@@ -1010,6 +1012,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_CRUISE_2D_ADJUSTING(nav
     if (posControl.flags.isAdjustingPosition) {
         posControl.cruise.yaw = posControl.actualState.yaw; //store current heading
         posControl.cruise.lastYawAdjustmentTime = millis();
+        posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
         return NAV_FSM_EVENT_NONE;  // reprocess the state
     }
 
@@ -1131,8 +1134,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_CLIMB_TO_SAFE_ALT(n
             // Save initial home distance for future use
             posControl.rthState.rthInitialDistance = posControl.homeDistance;
             fpVector3_t * tmpHomePos = rthGetHomeTargetPosition(RTH_HOME_ENROUTE_INITIAL);
-
-            posControl.lastWaypoint.pos = navGetCurrentActualPositionAndVelocity()->pos;
+            posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
 
             if (navConfig()->general.flags.rth_tail_first && !STATE(FIXED_WING)) {
                 setDesiredPosition(tmpHomePos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING_TAIL_FIRST);
@@ -1361,7 +1363,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_INITIALIZE(nav
         resetAltitudeController(false);
         setupAltitudeController();
 
-        posControl.lastWaypoint.pos = navGetCurrentActualPositionAndVelocity()->pos;
+        posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
 
         posControl.activeWaypointIndex = 0;
         return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_PRE_ACTION
@@ -1430,7 +1432,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(naviga
 {
     UNUSED(previousState);
 
-    posControl.lastWaypoint.pos = posControl.activeWaypoint.pos;
+    posControl.wpInitialPos = posControl.activeWaypoint.pos;
 
     switch (posControl.waypointList[posControl.activeWaypointIndex].action) {
         case NAV_WP_ACTION_RTH:
