@@ -3293,11 +3293,14 @@ bool navigationIsFlyingAutonomousMode(void)
 bool navigationRTHAllowsLanding(void)
 {
     navRTHAllowLanding_e allow = navConfig()->general.flags.rth_allow_landing;
-    return allow == NAV_RTH_ALLOW_LANDING_ALWAYS ||
-           allow == NAV_RTH_ALLOW_LANDING_APROACH ||
-          (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE)) ||
-          (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY_APR && FLIGHT_MODE(FAILSAFE_MODE)) ||
-           allow == NAV_RTH_ALLOW_LANDING_FS_NO_APR;
+    return allow == NAV_RTH_ALLOW_LANDING_ALWAYS
+        || (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE))
+#ifdef NAV_FIXED_WING_LANDING_APROACH
+        || allow == NAV_RTH_ALLOW_LANDING_APROACH
+        || (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY_APR && FLIGHT_MODE(FAILSAFE_MODE))
+        || allow == NAV_RTH_ALLOW_LANDING_FS_NO_APR
+#endif
+        ;
 }
 
 bool FAST_CODE isNavLaunchEnabled(void)
