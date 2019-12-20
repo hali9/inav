@@ -65,7 +65,9 @@ static float throttleSpeedAdjustment = 0;
 static bool isAutoThrottleManuallyIncreased = false;
 static int32_t navHeadingError;
 static int8_t loiterDirYaw = 1;
+#ifdef NAV_FIXED_WING_LANDING_APROACH
 static uint8_t virtualAproach = NAV_RTH_APROACH_LANDING_ABOVE_MAXALT;
+#endif
 
 /*-----------------------------------------------------------
  * Altitude controller
@@ -81,7 +83,9 @@ void resetFixedWingAltitudeController(void)
     posControl.rcAdjustment[PITCH] = 0;
     isPitchAdjustmentValid = false;
     throttleSpeedAdjustment = 0;
+#ifdef NAV_FIXED_WING_LANDING_APROACH
     virtualAproach = NAV_RTH_APROACH_LANDING_ABOVE_MAXALT;
+#endif
 }
 
 bool adjustFixedWingAltitudeFromRCInput(void)
@@ -114,15 +118,12 @@ static void calculateLoiter(loiter_t *loiter, float angle, float dist, float pos
 // Position to velocity controller for Z axis
 static void updateAltitudeVelocityAndPitchController_FW(timeDelta_t deltaMicros)
 {
+#ifdef NAV_FIXED_WING_LANDING_APROACH
     if (virtualAproach == NAV_RTH_APROACH_LANDING_MAXALT) {
         posControl.desiredState.pos.z = navConfig()->general.land_slowdown_maxalt;
     }
     if (virtualAproach == NAV_RTH_APROACH_LANDING_SAFEALT || virtualAproach == NAV_RTH_APROACH_LANDING_HOMEYAW) {
         posControl.desiredState.pos.z = navConfig()->fw.land_safe_alt;
-    }
-    if (virtualAproach == NAV_RTH_APROACH_LANDING_RESET) {
-        navPidReset(&posControl.pids.fw_alt);
-        virtualAproach = NAV_RTH_APROACH_LANDING_FINAL;
     }
     if (virtualAproach == NAV_RTH_APROACH_LANDING_FINAL) {
         loiter_t loiter;
@@ -130,6 +131,7 @@ static void updateAltitudeVelocityAndPitchController_FW(timeDelta_t deltaMicros)
         posControl.desiredState.pos.z = scaleRangef(loiter.distance, 0, navConfig()->fw.land_aproach_distance + navConfig()->fw.land_distance, 0, navConfig()->fw.land_safe_alt);
         if (posControl.desiredState.pos.z > navConfig()->fw.land_safe_alt) posControl.desiredState.pos.z = navConfig()->fw.land_safe_alt;
     }
+#endif
 
     static pt1Filter_t velzFilterState;
 
@@ -238,7 +240,9 @@ void resetFixedWingPositionController(void)
     posControl.rcAdjustment[ROLL] = 0;
     isRollAdjustmentValid = false;
 
+#ifdef NAV_FIXED_WING_LANDING_APROACH
     virtualAproach = NAV_RTH_APROACH_LANDING_ABOVE_MAXALT;
+#endif
 
     pt1FilterReset(&fwPosControllerCorrectionFilterState, 0.0f);
 }
@@ -255,7 +259,7 @@ static int8_t loiterDirection(void) {
     return dir;
 }
 
-static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navStateFlags, float trackingPeriod)
+static void calculateVirtualPositionTarget_FW(float trackingPeriod)
 {
     loiter_t loiter;
     calculateLoiter(&loiter, 0, 0, 0, 0);
@@ -266,23 +270,21 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
     // If angular visibility of a waypoint is less than 30deg, don't calculate circular loiter, go straight to the target
     #define TAN_15DEG    0.26795f
     float loiterRadiusTan = (navConfig()->fw.loiter_radius / TAN_15DEG);
+#ifdef NAV_FIXED_WING_LANDING_APROACH
     if (virtualAproach > NAV_RTH_APROACH_LANDING_DECISION)
         loiterRadiusTan += navConfig()->fw.land_aproach_distance - navConfig()->fw.loiter_radius;
+#endif
     bool needToCalculateCircularLoiter = isApproachingLastWaypoint()
                                             && (loiter.distance <= loiterRadiusTan)
                                             && (loiter.distance > 50.0f)
                                             && !FLIGHT_MODE(NAV_CRUISE_MODE);
 
-    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 0, posControl.rthState.homePosition.yaw);
-    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 2, posControl.actualState.yaw / 10);
-    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 3, (virtualAproach + 1) * loiterDirection());
-
     // Calculate virtual position for straight movement
     if (needToCalculateCircularLoiter) {
         loiter.posX = 0;
         loiter.posY = 0;
-#ifdef NAV_FIXED_WING_LANDING        
-        if (navStateFlags & NAV_CTL_LAND) {
+#ifdef NAV_FIXED_WING_LANDING_APROACH       
+        if (navGetCurrentStateFlags() & NAV_CTL_LAND) {
             if (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_APROACH ||
                (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_ONLY_APR && FLIGHT_MODE(FAILSAFE_MODE)) ||
                (navConfig()->general.flags.rth_allow_landing == NAV_RTH_ALLOW_LANDING_FS_NO_APR && !FLIGHT_MODE(FAILSAFE_MODE))) {
@@ -290,9 +292,7 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
                     ((posControl.flags.estAglStatus == EST_TRUSTED) && (posControl.actualState.agl.pos.z <= navConfig()->general.land_slowdown_maxalt))) {
                     virtualAproach = MAX(virtualAproach, NAV_RTH_APROACH_LANDING_MAXALT);
                 }               
-                float distanceAproach = sqrtf(sq(navConfig()->fw.loiter_radius) + sq(navConfig()->fw.land_aproach_distance));
-                int32_t angle = loiterDirection() * DEGREES_TO_CENTIDEGREES(180 - RADIANS_TO_DEGREES(acos_approx(navConfig()->fw.land_aproach_distance / distanceAproach)));
-                DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 1, angle);
+                int32_t angle = loiterDirection() * RADIANS_TO_CENTIDEGREES(atan2_approx(navConfig()->fw.loiter_radius, -navConfig()->fw.land_aproach_distance));
                 if ((ABS(wrap_18000(((posControl.rthState.homePosition.yaw + angle) % DEGREES_TO_CENTIDEGREES(360)) - posControl.actualState.yaw)) < DEGREES_TO_CENTIDEGREES(15)) &&
                     (virtualAproach == NAV_RTH_APROACH_LANDING_MAXALT)) {
                     virtualAproach = MAX(virtualAproach, NAV_RTH_APROACH_LANDING_DECISION);
@@ -307,12 +307,13 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
                 }
                 if ((loiter.distance <= (distanceAproach)) &&
                     (virtualAproach == NAV_RTH_APROACH_LANDING_HOMEYAW)) {
-                    virtualAproach = MAX(virtualAproach, NAV_RTH_APROACH_LANDING_RESET);
+                    virtualAproach = MAX(virtualAproach, NAV_RTH_APROACH_LANDING_FINAL);
                 }
                 if (virtualAproach == NAV_RTH_APROACH_LANDING_DECISION || virtualAproach == NAV_RTH_APROACH_LANDING_SAFEALT) {
-                    calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS(posControl.rthState.homePosition.yaw + angle), distanceAproach , 0, 0);
+                    calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS(posControl.rthState.homePosition.yaw + angle),
+                        sqrtf(sq(navConfig()->fw.loiter_radius) + sq(navConfig()->fw.land_aproach_distance)), 0, 0);
                 }
-                if (virtualAproach == NAV_RTH_APROACH_LANDING_RESET || virtualAproach == NAV_RTH_APROACH_LANDING_FINAL) {
+                if (virtualAproach == NAV_RTH_APROACH_LANDING_FINAL) {
                     calculateLoiter(&loiter, CENTIDEGREES_TO_RADIANS(posControl.rthState.homePosition.yaw), loiterRadiusTan, 0, 0);
 
                     float aproach = MIN(loiter.distance - (M_PIf * navConfig()->fw.loiter_radius / 4), 2 * loiterRadiusTan);
@@ -321,8 +322,9 @@ static void calculateVirtualPositionTarget_FW(navigationFSMStateFlags_t navState
                 }                
             }
         }
+        if (virtualAproach < NAV_RTH_APROACH_LANDING_HOMEYAW)
 #endif
-        if (virtualAproach < NAV_RTH_APROACH_LANDING_HOMEYAW) {
+        {
             // We are closing in on a waypoint, calculate circular loiter
             // We have temporary loiter target. Recalculate distance and position error
             calculateLoiter(&loiter, atan2_approx(-loiter.errorY, -loiter.errorX) + DEGREES_TO_RADIANS(loiterDirection() * 45.0f), 
@@ -407,7 +409,7 @@ static void updatePositionHeadingController_FW(timeUs_t currentTimeUs, timeDelta
     posControl.rcAdjustment[ROLL] = CENTIDEGREES_TO_DECIDEGREES(rollAdjustment);
 }
 
-void applyFixedWingPositionController(navigationFSMStateFlags_t navStateFlags, timeUs_t currentTimeUs)
+void applyFixedWingPositionController(timeUs_t currentTimeUs)
 {
     static timeUs_t previousTimePositionUpdate;         // Occurs @ GPS update rate
     static timeUs_t previousTimeUpdate;                 // Occurs @ looptime rate
@@ -435,7 +437,7 @@ void applyFixedWingPositionController(navigationFSMStateFlags_t navStateFlags, t
                 // Account for pilot's roll input (move position target left/right at max of max_manual_speed)
                 // POSITION_TARGET_UPDATE_RATE_HZ should be chosen keeping in mind that position target shouldn't be reached until next pos update occurs
                 // FIXME: verify the above
-                calculateVirtualPositionTarget_FW(navStateFlags, HZ2S(MIN_POSITION_UPDATE_RATE_HZ) * 2);
+                calculateVirtualPositionTarget_FW(HZ2S(MIN_POSITION_UPDATE_RATE_HZ) * 2);
 
                 updatePositionHeadingController_FW(currentTimeUs, deltaMicrosPositionUpdate);
             }
@@ -565,9 +567,13 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
      * TODO refactor conditions in this metod if logic is proven to be correct
      */
     if (navStateFlags & NAV_CTL_LAND) {
+#ifdef NAV_FIXED_WING_LANDING_APROACH
         if ( ((posControl.flags.estAltStatus >= EST_USABLE) && (navGetCurrentActualPositionAndVelocity()->pos.z <= navConfig()->fw.land_motor_off_alt)) ||
              ((posControl.flags.estAglStatus == EST_TRUSTED) && (posControl.actualState.agl.pos.z <= navConfig()->fw.land_motor_off_alt)) ) {
-
+#else
+        if ( ((posControl.flags.estAltStatus >= EST_USABLE) && (navGetCurrentActualPositionAndVelocity()->pos.z <= navConfig()->general.land_slowdown_minalt)) ||
+             ((posControl.flags.estAglStatus == EST_TRUSTED) && (posControl.actualState.agl.pos.z <= navConfig()->general.land_slowdown_minalt)) ) {
+#endif
             // Set motor to min. throttle and stop it when MOTOR_STOP feature is enabled
             rcCommand[THROTTLE] = motorConfig()->minthrottle;
             ENABLE_STATE(NAV_MOTOR_STOP_OR_IDLE);
@@ -658,7 +664,7 @@ void applyFixedWingNavigationController(navigationFSMStateFlags_t navStateFlags,
             }
 
             if (navStateFlags & NAV_CTL_POS)
-                applyFixedWingPositionController(navStateFlags, currentTimeUs);
+                applyFixedWingPositionController(currentTimeUs);
 
         } else {
             posControl.rcAdjustment[PITCH] = 0;
