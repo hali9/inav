@@ -639,8 +639,6 @@ void resetFixedWingHeadingController(void)
 
 void applyFixedWingNavigationController(navigationFSMStateFlags_t navStateFlags, timeUs_t currentTimeUs)
 {
-    DEBUG_SET(DEBUG_NAV_LANDING_DETECTOR, 3, (virtualAproach + 1) * loiterDirection());
-
     if (navStateFlags & NAV_CTL_LAUNCH) {
         applyFixedWingLaunchController(currentTimeUs);
     }
