@@ -1549,22 +1549,22 @@ groups:
         max: 20
       - name: nav_fw_land_safe_alt
         field: fw.land_safe_alt
-        condition: NAV_FIXED_WING_LANDING
+        condition: NAV_FIXED_WING_LANDING_APROACH
         min: 50
         max: 4000
       - name: nav_fw_land_motor_off_alt
         field: fw.land_motor_off_alt
-        condition: NAV_FIXED_WING_LANDING
+        condition: NAV_FIXED_WING_LANDING_APROACH
         min: 50
         max: 2000
       - name: nav_fw_land_aproach_distance
         field: fw.land_aproach_distance
-        condition: NAV_FIXED_WING_LANDING
+        condition: NAV_FIXED_WING_LANDING_APROACH
         min: 0
         max: 20000
       - name: nav_fw_land_distance
         field: fw.land_distance
-        condition: NAV_FIXED_WING_LANDING
+        condition: NAV_FIXED_WING_LANDING_APROACH
         min: 0
         max: 20000
 
