@@ -1445,7 +1445,7 @@ static void cliWaypoints(char *cmdline)
                 flag = fastA2I(ptr);
                 validArgumentCount++;
             }
-            if (validArgumentCount < 7) {
+            if (validArgumentCount < 8) {
                 cliShowParseError();
             } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH || action == NAV_WP_ACTION_RELATIVE)
                     || (p1 < 0)
@@ -1462,7 +1462,7 @@ static void cliWaypoints(char *cmdline)
                 posControl.waypointList[i].p1 = p1;
                 posControl.waypointList[i].p2 = p2;
                 posControl.waypointList[i].p3 = p3;
-               posControl.waypointList[i].flag = flag;
+                posControl.waypointList[i].flag = flag;
             }
         } else {
             cliShowArgumentRangeError("wp index", 0, NAV_MAX_WAYPOINTS - 1);
