@@ -374,7 +374,8 @@ static void updateIMUEstimationWeight(const float dt)
 
 float navGetAccelerometerWeight(void)
 {
-    const float accWeightScaled = posEstimator.imu.accWeightFactor * positionEstimationConfig()->w_xyz_acc_p;
+    const float accWeightScaled = //posEstimator.imu.accWeightFactor * 
+        positionEstimationConfig()->w_xyz_acc_p;
     DEBUG_SET(DEBUG_VIBE, 5, accWeightScaled * 1000);
 
     return accWeightScaled;
