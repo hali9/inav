@@ -76,7 +76,8 @@
 #define PG_VTX_CONFIG 54
 #define PG_ELERES_CONFIG 55
 #define PG_TEMP_SENSOR_CONFIG 56
-#define PG_CF_END 56
+#define PG_RX_CHANNEL_AUX_CONFIG 57
+#define PG_CF_END 57
 
 // Driver configuration
 //#define PG_DRIVER_PWM_RX_CONFIG 100
@@ -106,7 +107,11 @@
 #define PG_LOGIC_CONDITIONS 1016
 #define PG_LOG_CONFIG 1017
 #define PG_RCDEVICE_CONFIG 1018
-#define PG_INAV_END 1018
+#define PG_GENERAL_SETTINGS 1019
+#define PG_GLOBAL_FUNCTIONS 1020
+#define PG_ESC_SENSOR_CONFIG 1021
+#define PG_RPM_FILTER_CONFIG 1022
+#define PG_INAV_END 1022
 
 // OSD configuration (subject to change)
 //#define PG_OSD_FONT_CONFIG 2047

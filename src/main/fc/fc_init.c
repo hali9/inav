@@ -61,7 +61,6 @@
 #include "drivers/pwm_output.h"
 #include "drivers/pwm_output.h"
 #include "drivers/rx_pwm.h"
-#include "drivers/sdcard.h"
 #include "drivers/sensor.h"
 #include "drivers/serial.h"
 #include "drivers/serial_softserial.h"
@@ -77,6 +76,11 @@
 #include "drivers/io_pca9685.h"
 #include "drivers/vtx_rtc6705.h"
 #include "drivers/vtx_common.h"
+#ifdef USE_USB_MSC
+#include "drivers/usb_msc.h"
+#include "msc/emfat_file.h"
+#endif
+#include "drivers/sdcard/sdcard.h"
 
 #include "fc/cli.h"
 #include "fc/config.h"
@@ -90,11 +94,13 @@
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/servos.h"
+#include "flight/rpm_filter.h"
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
 #include "io/lights.h"
 #include "io/dashboard.h"
+#include "io/displayport_frsky_osd.h"
 #include "io/displayport_msp.h"
 #include "io/displayport_max7456.h"
 #include "io/flashfs.h"
@@ -129,6 +135,8 @@
 #include "sensors/pitotmeter.h"
 #include "sensors/rangefinder.h"
 #include "sensors/sensors.h"
+
+#include "scheduler/scheduler.h"
 
 #include "telemetry/telemetry.h"
 
@@ -215,11 +223,7 @@ void init(void)
     // Latch active features to be used for feature() in the remainder of init().
     latchActiveFeatures();
 
-#ifdef ALIENFLIGHTF3
-    ledInit(hardwareRevision == AFF3_REV_1 ? false : true);
-#else
     ledInit(false);
-#endif
 
 #ifdef USE_EXTI
     EXTIInit();
@@ -359,6 +363,33 @@ void init(void)
 #if defined(USE_RANGEFINDER_HCSR04) && defined(USE_SOFTSERIAL2) && defined(SPRACINGF3)
     if ((rangefinderConfig()->rangefinder_hardware == RANGEFINDER_HCSR04) && feature(FEATURE_SOFTSERIAL)) {
         serialRemovePort(SERIAL_PORT_SOFTSERIAL2);
+    }
+#endif
+
+#ifdef USE_USB_MSC
+    /* MSC mode will start after init, but will not allow scheduler to run,
+     * so there is no bottleneck in reading and writing data
+     */
+    mscInit();
+#if defined(USE_FLASHFS)
+        // If the blackbox device is onboard flash, then initialize and scan
+        // it to identify the log files *before* starting the USB device to
+        // prevent timeouts of the mass storage device.
+        if (blackboxConfig()->device == BLACKBOX_DEVICE_FLASH) {
+#ifdef USE_FLASH_M25P16
+            // Must initialise the device to read _anything_
+            m25p16_init(0);
+#endif
+            emfat_init_files();
+        }
+#endif
+
+    if (mscCheckBoot() || mscCheckButton()) {
+        if (mscStart() == 0) {
+             mscWaitForButton();
+        } else {
+             NVIC_SystemReset();
+        }
     }
 #endif
 
@@ -507,11 +538,21 @@ void init(void)
 
 #ifdef USE_OSD
     if (feature(FEATURE_OSD)) {
+#if defined(USE_FRSKYOSD)
+        if (!osdDisplayPort) {
+            osdDisplayPort = frskyOSDDisplayPortInit(osdConfig()->video_system);
+        }
+#endif
 #if defined(USE_MAX7456)
-        // If there is a max7456 chip for the OSD then use it
-        osdDisplayPort = max7456DisplayPortInit(osdConfig()->video_system);
+        // If there is a max7456 chip for the OSD and we have no
+        // external OSD initialized, use it.
+        if (!osdDisplayPort) {
+            osdDisplayPort = max7456DisplayPortInit(osdConfig()->video_system);
+        }
 #elif defined(USE_OSD_OVER_MSP_DISPLAYPORT) // OSD over MSP; not supported (yet)
-        osdDisplayPort = displayPortMspInit();
+        if (!osdDisplayPort) {
+            osdDisplayPort = displayPortMspInit();
+        }
 #endif
         // osdInit  will register with CMS by itself.
         osdInit(osdDisplayPort);
@@ -628,6 +669,20 @@ void init(void)
     latchActiveFeatures();
     motorControlEnable = true;
     fcTasksInit();
+
+#ifdef USE_OSD
+    if (feature(FEATURE_OSD) && (osdDisplayPort != NULL)) {
+        setTaskEnabled(TASK_OSD, feature(FEATURE_OSD));
+    }
+#endif
+
+#ifdef USE_RPM_FILTER
+    disableRpmFilters();
+    if (STATE(ESC_SENSOR_ENABLED) && (rpmFilterConfig()->gyro_filter_enabled || rpmFilterConfig()->dterm_filter_enabled)) {
+        rpmFiltersInit();
+        setTaskEnabled(TASK_RPM_FILTER, true);
+    }
+#endif
 
     systemState |= SYSTEM_STATE_READY;
 }
