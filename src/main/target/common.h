@@ -162,6 +162,7 @@
 #define USE_LOGIC_CONDITIONS
 #define USE_GLOBAL_FUNCTIONS
 #define USE_CLI_BATCH
+#define NAV_FIXED_WING_LANDING_APROACH
 #endif
 
 //Enable DST calculations
