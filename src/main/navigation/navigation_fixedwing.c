@@ -35,6 +35,7 @@
 #include "sensors/sensors.h"
 #include "sensors/acceleration.h"
 #include "sensors/boardalignment.h"
+#include "sensors/pitotmeter.h"
 
 #include "flight/pid.h"
 #include "flight/imu.h"
@@ -65,7 +66,7 @@ static float throttleSpeedAdjustment = 0;
 static bool isAutoThrottleManuallyIncreased = false;
 static int32_t navHeadingError;
 static int8_t loiterDirYaw = 1;
-
+static int16_t previousThrottle = 1000;
 
 /*-----------------------------------------------------------
  * Altitude controller
@@ -234,8 +235,19 @@ static void calculateVirtualPositionTarget_FW(float trackingPeriod)
 
     float distanceToActualTarget = sqrtf(sq(posErrorX) + sq(posErrorY));
 
+    previousThrottle = constrainf(previousThrottle, navConfig()->fw.min_throttle, navConfig()->fw.max_throttle);
+    float airspeedForCoordinatedTurn = scaleRangef(previousThrottle, navConfig()->fw.cruise_throttle, navConfig()->fw.max_throttle,
+        pidProfile()->fixedWingReferenceAirspeed, pidProfile()->fixedWingReferenceAirspeed * 1.5f);
+    if (previousThrottle < navConfig()->fw.cruise_throttle) 
+        airspeedForCoordinatedTurn = scaleRangef(previousThrottle, navConfig()->fw.min_throttle, navConfig()->fw.cruise_throttle,
+            pidProfile()->fixedWingReferenceAirspeed / 2, pidProfile()->fixedWingReferenceAirspeed);
+#if defined(USE_PITOT)
+    if (sensors(SENSOR_PITOT)) airspeedForCoordinatedTurn = pitot.airSpeed;
+#endif
+    airspeedForCoordinatedTurn = constrainf(airspeedForCoordinatedTurn, 100, navConfig()->fw.launch_velocity_thresh); //6000 100.0f nav_fw_launch_velocity min: 100 max: 10000 def:300);
+    //DEBUG_SET(DEBUG_SMARTAUDIO, 3, lrintf(airspeedForCoordinatedTurn));
     // Limit minimum forward velocity to 1 m/s
-    float trackingDistance = trackingPeriod * MAX(posControl.actualState.velXY, 100.0f);
+    float trackingDistance = trackingPeriod * MAX(posControl.actualState.velXY, airspeedForCoordinatedTurn);
 
     // If angular visibility of a waypoint is less than 30deg, don't calculate circular loiter, go straight to the target
     #define TAN_15DEG    0.26795f
@@ -502,12 +514,16 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
 
             // Stabilize ROLL axis on 0 degrees banking regardless of loiter radius and position
             rcCommand[ROLL] = 0;
-
+            if (virtualAproach == NAV_RTH_APROACH_LANDING_FINAL) {
+                int16_t rollCorrection = constrain(posControl.rcAdjustment[ROLL], -DEGREES_TO_DECIDEGREES(10), DEGREES_TO_DECIDEGREES(10));
+                rcCommand[ROLL] = pidAngleToRcCommand(rollCorrection, pidProfile()->max_angle_inclination[FD_ROLL]);
+            }
             // Stabilize PITCH angle into shallow dive as specified by the nav_fw_land_dive_angle setting (default value is 2 - defined in navigation.c).
             rcCommand[PITCH] = pidAngleToRcCommand(DEGREES_TO_DECIDEGREES(navConfig()->fw.land_dive_angle), pidProfile()->max_angle_inclination[FD_PITCH]);
         }
     }
 #endif
+    previousThrottle = rcCommand[THROTTLE];
 }
 
 bool isFixedWingAutoThrottleManuallyIncreased()
