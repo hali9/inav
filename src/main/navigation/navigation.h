@@ -32,7 +32,7 @@
 
 /* GPS Home location data */
 extern gpsLocation_t        GPS_home;
-extern uint32_t             GPS_distanceToHome;        // distance to home point in meters 
+extern uint32_t             GPS_distanceToHome;        // distance to home point in meters
 extern int16_t              GPS_directionToHome;       // direction to home point in degrees
 
 extern bool autoThrottleManuallyIncreased;
@@ -180,9 +180,12 @@ typedef struct navConfig_s {
         uint16_t emerg_descent_rate;            // emergency landing descent rate
         uint16_t rth_altitude;                  // altitude to maintain when RTH is active (depends on rth_alt_control_mode) (cm)
         uint16_t rth_home_altitude;             // altitude to go to during RTH after the craft reached home (cm)
+        uint16_t rth_home_wait;                 // time to wait to during RTH after the craft reached home (s)
         uint16_t min_rth_distance;              // 0 Disables. Minimal distance for RTH in cm, otherwise it will just autoland
         uint16_t rth_abort_threshold;           // Initiate emergency landing if during RTH we get this much [cm] away from home
         uint16_t max_terrain_follow_altitude;   // Max altitude to be used in SURFACE TRACKING mode
+        uint16_t rth_home_offset_distance;	  // Distance offset from GPS established home to "safe" position used for RTH (cm, 0 disables)
+        uint16_t rth_home_offset_direction;	  // Direction offset from GPS established home to "safe" position used for RTH (degrees, 0=N, 90=E, 180=S, 270=W, requires non-zero offset distance)
     } general;
 
     struct {
@@ -245,7 +248,8 @@ typedef struct gpsOrigin_s {
 
 typedef enum {
     NAV_WP_ACTION_WAYPOINT = 0x01,
-    NAV_WP_ACTION_RTH      = 0x04
+    NAV_WP_ACTION_RTH      = 0x04,
+    NAV_WP_ACTION_RELATIVE = 0x09
 } navWaypointActions_e;
 
 typedef enum {
@@ -342,7 +346,7 @@ typedef enum {
     MW_NAV_STATE_WP_ENROUTE,              // WP Enroute
     MW_NAV_STATE_PROCESS_NEXT,            // Process next
     MW_NAV_STATE_DO_JUMP,                 // Jump
-    MW_NAV_STATE_LAND_START,              // Start Land (unused)
+    MW_NAV_STATE_LAND_START,              // RTH wait
     MW_NAV_STATE_LAND_IN_PROGRESS,        // Land in Progress
     MW_NAV_STATE_LANDED,                  // Landed
     MW_NAV_STATE_LAND_SETTLE,             // Settling before land
@@ -429,7 +433,7 @@ bool isWaypointListValid(void);
 void getWaypoint(uint8_t wpNumber, navWaypoint_t * wpData);
 void setWaypoint(uint8_t wpNumber, const navWaypoint_t * wpData);
 void resetWaypointList(void);
-bool loadNonVolatileWaypointList(void);
+bool loadNonVolatileWaypointList(bool checkRelativeCalculate);
 bool saveNonVolatileWaypointList(void);
 
 float getFinalRTHAltitude(void);
