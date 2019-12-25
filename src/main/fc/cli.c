@@ -1440,7 +1440,8 @@ static void cliWaypoints(char *cmdline)
             if (validArgumentCount < 7) {
                 cliShowParseError();
             } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH || action == NAV_WP_ACTION_RELATIVE)
-                    || (p1 < 0) 
+                    || (p1 < 0)
+                    || (p3 < -360) || (p3 > 360) 
                     || !(flag == 0 || flag == NAV_WP_FLAG_LAST)
                     || (action == NAV_WP_ACTION_RELATIVE && (lat < 0 || lat * 100 > navConfig()->general.waypoint_safe_distance || lon < 0 || lon > 359))) {
                 cliShowParseError();
