@@ -65,6 +65,13 @@ typedef enum {
     NAV_HOME_VALID_ALL = NAV_HOME_VALID_XY | NAV_HOME_VALID_Z | NAV_HOME_VALID_HEADING,
 } navigationHomeFlags_t;
 
+typedef enum {
+    NAV_HOME_MIN_RTH = 0, //actual yaw, always
+    NAV_HOME_DISARM = 1, //actual yaw, navigationActualStateHomeValidity
+    NAV_HOME_RESET = 2, //actual yaw, navigationActualStateHomeValidity
+    NAV_HOME_WP = 3, //0 always
+} navigationHomeReason_t;
+
 typedef struct navigationFlags_s {
     bool horizontalPositionDataNew;
     bool verticalPositionDataNew;
@@ -362,6 +369,7 @@ typedef struct {
     float                       wpInitialAltitude; // Altitude at start of WP
     float                       wpInitialDistance; // Distance when starting flight to WP
     float                       wpDistance;        // Distance to active WP
+    int32_t                     wpInitialYaw; 
 
     /* Internals & statistics */
     int16_t                     rcAdjustment[4];
@@ -390,7 +398,7 @@ bool isLandingDetected(void);
 
 navigationFSMStateFlags_t navGetCurrentStateFlags(void);
 
-void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags);
+void setHomePosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask, navigationHomeFlags_t homeFlags, navigationHomeReason_t reason);
 void setDesiredPosition(const fpVector3_t * pos, int32_t yaw, navSetWaypointFlags_t useMask);
 void setDesiredSurfaceOffset(float surfaceOffset);
 void setDesiredPositionToFarAwayTarget(int32_t yaw, int32_t distance, navSetWaypointFlags_t useMask);

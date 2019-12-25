@@ -66,6 +66,7 @@ extern uint8_t __config_end;
 #include "drivers/system.h"
 #include "drivers/time.h"
 #include "drivers/timer.h"
+#include "drivers/usb_msc.h"
 
 #include "fc/fc_core.h"
 #include "fc/cli.h"
@@ -1158,6 +1159,62 @@ static void cliRxRange(char *cmdline)
     }
 }
 
+static void printRxAux(uint8_t dumpMask, const int16_t *channelAuxConfigs, const int16_t *defaultChannelAuxConfigs)
+{
+    const char *format = "rxaux %u %d";
+    for (uint8_t i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+        bool equalsDefault = false;
+        if (defaultChannelAuxConfigs) {
+            equalsDefault = channelAuxConfigs[i] == defaultChannelAuxConfigs[i];
+            cliDefaultPrintLinef(dumpMask, equalsDefault, format,
+                i,
+                defaultChannelAuxConfigs[i]
+            );
+        }
+        cliDumpPrintLinef(dumpMask, equalsDefault, format,
+            i,
+            channelAuxConfigs[i]
+        );
+    }
+}
+
+static void cliRxAux(char *cmdline)
+{
+    int i, validArgumentCount = 0;
+    const char *ptr;
+
+    if (isEmpty(cmdline)) {
+	printRxAux(DUMP_MASTER, rxChannelAuxConfigs(0), NULL);
+    } else if (sl_strcasecmp(cmdline, "reset") == 0) {
+	for (int i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+            (*rxChannelAuxConfigsMutable(i)) = 0;
+        }
+    } else {
+        ptr = cmdline;
+        i = fastA2I(ptr);
+        if (i >= 0 && i < MAX_AUX_CHANNEL_COUNT) {
+            int auxValue;
+
+            ptr = nextArg(ptr);
+            if (ptr) {
+                auxValue = fastA2I(ptr);
+                validArgumentCount++;
+            }
+
+            if (validArgumentCount != 1) {
+                cliShowParseError();
+            } else if ((PWM_PULSE_MIN <= auxValue && auxValue <= PWM_PULSE_MAX) || auxValue == 1
+		    || (-PWM_PULSE_MAX <= auxValue && auxValue <= -PWM_PULSE_MIN) || auxValue == 0) {
+                (*rxChannelAuxConfigsMutable(i)) = auxValue;
+            } else {
+                cliShowParseError();
+            }
+        } else {
+            cliShowArgumentRangeError("channel", 0, MAX_AUX_CHANNEL_COUNT - 1);
+        }
+    }
+}
+
 #ifdef USE_TEMPERATURE_SENSOR
 static void printTempSensor(uint8_t dumpMask, const tempSensorConfig_t *tempSensorConfigs, const tempSensorConfig_t *defaultTempSensorConfigs)
 {
@@ -1277,7 +1334,7 @@ static void cliTempSensor(char *cmdline)
 static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, const navWaypoint_t *defaultNavWaypoint)
 {
     cliPrintLinef("#wp %d %svalid", posControl.waypointCount, posControl.waypointListValid ? "" : "in"); //int8_t bool
-    const char *format = "wp %u %u %d %d %d %d %d %u"; //uint8_t action; int32_t lat; int32_t lon; int32_t alt; int16_t p1; int16_t p2; uint8_t flag
+    const char *format = "wp %u %u %d %d %d %d %d %d %u"; //uint8_t action; int32_t lat; int32_t lon; int32_t alt; int16_t p1; int16_t p2; int16_t p3; uint8_t flag
     for (uint8_t i = 0; i < NAV_MAX_WAYPOINTS; i++) {
         bool equalsDefault = false;
         if (defaultNavWaypoint) {
@@ -1287,6 +1344,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
                 && navWaypoint[i].alt == defaultNavWaypoint[i].alt
                 && navWaypoint[i].p1 == defaultNavWaypoint[i].p1
                 && navWaypoint[i].p2 == defaultNavWaypoint[i].p2
+                && navWaypoint[i].p3 == defaultNavWaypoint[i].p3
                 && navWaypoint[i].flag == defaultNavWaypoint[i].flag;
             cliDefaultPrintLinef(dumpMask, equalsDefault, format,
                 i,
@@ -1296,6 +1354,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
                 defaultNavWaypoint[i].alt,
                 defaultNavWaypoint[i].p1,
                 defaultNavWaypoint[i].p2,
+                defaultNavWaypoint[i].p3,
                 defaultNavWaypoint[i].flag
             );
         }
@@ -1307,6 +1366,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
             navWaypoint[i].alt,
             navWaypoint[i].p1,
             navWaypoint[i].p2,
+            navWaypoint[i].p3,
             navWaypoint[i].flag
         );
     }
@@ -1319,11 +1379,13 @@ static void cliWaypoints(char *cmdline)
     } else if (sl_strcasecmp(cmdline, "reset") == 0) {
         resetWaypointList();
     } else if (sl_strcasecmp(cmdline, "load") == 0) {
-        loadNonVolatileWaypointList();
+        loadNonVolatileWaypointList(false);
     } else if (sl_strcasecmp(cmdline, "save") == 0) {
         posControl.waypointListValid = false;
         for (int i = 0; i < NAV_MAX_WAYPOINTS; i++) {
-            if (!(posControl.waypointList[i].action == NAV_WP_ACTION_WAYPOINT || posControl.waypointList[i].action == NAV_WP_ACTION_RTH)) break;
+            if (!(posControl.waypointList[i].action == NAV_WP_ACTION_WAYPOINT
+               || posControl.waypointList[i].action == NAV_WP_ACTION_RTH
+               || posControl.waypointList[i].action == NAV_WP_ACTION_RELATIVE)) break;
             if (posControl.waypointList[i].flag == NAV_WP_FLAG_LAST) {
                 posControl.waypointCount = i + 1;
                 posControl.waypointListValid = true;
@@ -1336,12 +1398,9 @@ static void cliWaypoints(char *cmdline)
             cliShowParseError();
         }
     } else {
-        int16_t i;
-        uint8_t action;
+        int16_t i, p1, p2, p3;
+        uint8_t action, flag;
         int32_t lat, lon, alt;
-        int16_t p1 = 0;
-        int16_t p2 = 0;
-        uint8_t flag = 0;
         uint8_t validArgumentCount = 0;
         const char *ptr = cmdline;
         i = fastA2I(ptr);
@@ -1378,13 +1437,22 @@ static void cliWaypoints(char *cmdline)
             }
             ptr = nextArg(ptr);
             if (ptr) {
+                p3 = fastA2I(ptr);
+                validArgumentCount++;
+            }
+            ptr = nextArg(ptr);
+            if (ptr) {
                 flag = fastA2I(ptr);
                 validArgumentCount++;
             }
-            if (validArgumentCount < 4) {
+            if (validArgumentCount < 7) {
                 cliShowParseError();
-            } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH)
-		     || (p1 < 0) || (p2 < 0) || !(flag == 0 || flag == NAV_WP_FLAG_LAST)) {
+            } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH || action == NAV_WP_ACTION_RELATIVE)
+                    || (p1 < 0)
+                    || (p2 < 0)
+                    || (p3 < -360) || (p3 > 360) 
+                    || !(flag == 0 || flag == NAV_WP_FLAG_LAST)
+                    || (action == NAV_WP_ACTION_RELATIVE && (lat < 0 || lat * 100 > navConfig()->general.waypoint_safe_distance || lon < 0 || lon > 359))) {
                 cliShowParseError();
             } else {
                 posControl.waypointList[i].action = action;
@@ -1393,7 +1461,8 @@ static void cliWaypoints(char *cmdline)
                 posControl.waypointList[i].alt = alt;
                 posControl.waypointList[i].p1 = p1;
                 posControl.waypointList[i].p2 = p2;
-                posControl.waypointList[i].flag = flag;
+                posControl.waypointList[i].p3 = p3;
+               posControl.waypointList[i].flag = flag;
             }
         } else {
             cliShowArgumentRangeError("wp index", 0, NAV_MAX_WAYPOINTS - 1);
@@ -3212,6 +3281,9 @@ static void printConfig(const char *cmdline, bool doDiff)
         cliPrintHashLine("adjrange");
         printAdjustmentRange(dumpMask, adjustmentRanges_CopyArray, adjustmentRanges(0));
 
+	cliPrintHashLine("rxaux");
+        printRxAux(dumpMask, rxChannelAuxConfigs_CopyArray, rxChannelAuxConfigs(0));
+	    
         cliPrintHashLine("rxrange");
         printRxRange(dumpMask, rxChannelRangeConfigs_CopyArray, rxChannelRangeConfigs(0));
 
@@ -3289,6 +3361,42 @@ static void cliDiff(char *cmdline)
 {
     printConfig(cmdline, true);
 }
+
+#ifdef USE_USB_MSC
+static void cliMsc(char *cmdline)
+{
+    UNUSED(cmdline);
+
+    if (false
+#ifdef USE_SDCARD
+        || sdcard_isFunctional()
+#endif
+#ifdef USE_FLASHFS
+        || flashfsGetSize() > 0
+#endif
+    ) {
+        cliPrintHashLine("restarting in mass storage mode");
+        cliPrint("\r\nRebooting");
+        bufWriterFlush(cliWriter);
+        delay(1000);
+        waitForSerialPortToFinishTransmitting(cliPort);
+        stopPwmAllMotors();
+
+#ifdef STM32F7
+        *((__IO uint32_t*) BKPSRAM_BASE + 16) = MSC_MAGIC;
+#elif defined(STM32F4)
+        *((uint32_t *)0x2001FFF0) = MSC_MAGIC;
+#endif
+
+        __disable_irq();
+        NVIC_SystemReset();
+    } else {
+        cliPrint("\r\nStorage not present or failed to initialize!");
+        bufWriterFlush(cliWriter);
+    }
+}
+#endif
+
 
 typedef struct {
     const char *name;
@@ -3371,6 +3479,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("memory", "view memory usage", NULL, cliMemory),
     CLI_COMMAND_DEF("mmix", "custom motor mixer", NULL, cliMotorMix),
     CLI_COMMAND_DEF("motor",  "get/set motor", "<index> [<value>]", cliMotor),
+#ifdef USE_USB_MSC
+    CLI_COMMAND_DEF("msc", "switch into msc mode", NULL, cliMsc),
+#endif
 #ifdef PLAY_SOUND
     CLI_COMMAND_DEF("play_sound", NULL, "[<index>]\r\n", cliPlaySound),
 #endif
@@ -3381,6 +3492,7 @@ const clicmd_t cmdTable[] = {
 #if !defined(SKIP_TASK_STATISTICS) && !defined(SKIP_CLI_RESOURCES)
     CLI_COMMAND_DEF("resource", "view currently used resources", NULL, cliResource),
 #endif
+    CLI_COMMAND_DEF("rxaux", "configure rx aux failsafe", NULL, cliRxAux),
     CLI_COMMAND_DEF("rxrange", "configure rx channel ranges", NULL, cliRxRange),
     CLI_COMMAND_DEF("save", "save and reboot", NULL, cliSave),
     CLI_COMMAND_DEF("serial", "configure serial ports", NULL, cliSerial),

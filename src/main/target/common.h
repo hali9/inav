@@ -18,7 +18,7 @@
 #pragma once
 
 #if defined(STM32F3)
-#define DYNAMIC_HEAP_SIZE   1024
+#define DYNAMIC_HEAP_SIZE   1536
 #else
 #define DYNAMIC_HEAP_SIZE   2048
 #endif
@@ -42,6 +42,10 @@
 #define CLI_MINIMAL_VERBOSITY
 #define SKIP_CLI_COMMAND_HELP
 #define SKIP_CLI_RESOURCES
+#endif
+
+#if defined(STM32F4) || defined(STM32F7)
+#define USE_USB_MSC
 #endif
 
 #define USE_ADC_AVERAGING
@@ -101,7 +105,6 @@
 
 #define USE_PWM_DRIVER_PCA9685
 
-#define USE_TELEMETRY_SIM
 #define USE_FRSKYOSD
 
 #define NAV_NON_VOLATILE_WAYPOINT_CLI
@@ -125,6 +128,8 @@
 #define USE_GPS_PROTO_NMEA
 #define USE_GPS_PROTO_MTK
 #define NAV_GPS_GLITCH_DETECTION
+#define USE_TELEMETRY_SIM
+#define NAV_NON_VOLATILE_WAYPOINT_CLI
 #define NAV_NON_VOLATILE_WAYPOINT_STORAGE
 #define USE_TELEMETRY_HOTT
 #define USE_TELEMETRY_IBUS
@@ -154,7 +159,6 @@
 #define USE_VTX_TRAMP
 #define USE_VTX_FFPV
 
-#ifndef STM32F3 //F3 series does not have enoug RAM to support logic conditions
 #define USE_LOGIC_CONDITIONS
 #define USE_GLOBAL_FUNCTIONS
 #define USE_CLI_BATCH
