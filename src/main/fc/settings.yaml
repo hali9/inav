@@ -94,7 +94,7 @@ tables:
     values: ["NONE", "ALTITUDE", "GROUND_SPEED", "HOME_DISTANCE"]
     enum: osd_sidebar_scroll_e
   - name: nav_rth_allow_landing
-    values: ["NEVER", "ALWAYS", "FS_ONLY"]
+    values: ["NEVER", "ALWAYS", "FS_ONLY", "APROACH", "FS_ONLY_APR", "FS_NO_APR"]
     enum: navRTHAllowLanding_e
   - name: bat_capacity_unit
     values: ["MAH", "MWH"]
@@ -1140,6 +1140,11 @@ groups:
         min: HEADING_HOLD_RATE_LIMIT_MIN
         max: HEADING_HOLD_RATE_LIMIT_MAX
 
+      - name: nav_land_direction
+        field: land_direction
+        condition: USE_NAV
+        min: -360
+        max: 360
       - name: nav_mc_pos_z_p
         field: bank_mc.pid[PID_POS_Z].P
         condition: USE_NAV
@@ -1437,11 +1442,11 @@ groups:
       - name: nav_land_slowdown_minalt
         field: general.land_slowdown_minalt
         min: 50
-        max: 1000
+        max: 2000
       - name: nav_land_slowdown_maxalt
         field: general.land_slowdown_maxalt
         min: 500
-        max: 4000
+        max: 5000
       - name: nav_emerg_landing_speed
         field: general.emerg_descent_rate
         min: 100
@@ -1479,6 +1484,9 @@ groups:
         max: 65000
       - name: nav_rth_home_altitude
         field: general.rth_home_altitude
+        max: 65000
+      - name: nav_rth_home_wait
+        field: general.rth_home_wait
         max: 65000
       - name: nav_rth_home_offset_distance
         field: general.rth_home_offset_distance
@@ -1590,6 +1598,26 @@ groups:
         condition: NAV_FIXED_WING_LANDING
         min: -20
         max: 20
+      - name: nav_fw_land_safe_alt
+        field: fw.land_safe_alt
+        condition: NAV_FIXED_WING_LANDING_APROACH
+        min: 50
+        max: 4000
+      - name: nav_fw_land_motor_off_alt
+        field: fw.land_motor_off_alt
+        condition: NAV_FIXED_WING_LANDING_APROACH
+        min: 50
+        max: 2000
+      - name: nav_fw_land_aproach_distance
+        field: fw.land_aproach_distance
+        condition: NAV_FIXED_WING_LANDING_APROACH
+        min: 0
+        max: 20000
+      - name: nav_fw_land_distance
+        field: fw.land_distance
+        condition: NAV_FIXED_WING_LANDING_APROACH
+        min: 0
+        max: 20000
 
       - name: nav_fw_launch_velocity
         field: fw.launch_velocity_thresh
