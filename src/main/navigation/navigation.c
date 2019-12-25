@@ -151,6 +151,10 @@ PG_RESET_TEMPLATE(navConfig_t, navConfig,
 
         //Fixed wing landing
         .land_dive_angle = 2,                   // 2 degrees dive by default
+        .land_safe_alt = 1500,                  // 15m to safe flying
+        .land_motor_off_alt = 500,              // 5m when motor cut off
+        .land_aproach_distance = 7500,          // 75m for aproach
+        .land_distance = 7500,                  // 75m for land
 
         // Fixed wing launch
         .launch_velocity_thresh = 300,          // 3 m/s
@@ -995,6 +999,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_CRUISE_2D_INITIALIZE(na
     posControl.cruise.yaw = posControl.actualState.yaw; // Store the yaw to follow
     posControl.cruise.previousYaw = posControl.cruise.yaw;
     posControl.cruise.lastYawAdjustmentTime = 0;
+    posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
 
     return NAV_FSM_EVENT_SUCCESS; // Go to CRUISE_XD_IN_PROGRESS state
 }
@@ -1021,6 +1026,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_CRUISE_2D_IN_PROGRESS(n
         posControl.cruise.yaw = wrap_36000(posControl.cruise.yaw - centidegsPerIteration);
         DEBUG_SET(DEBUG_CRUISE, 1, CENTIDEGREES_TO_DEGREES(posControl.cruise.yaw));
         posControl.cruise.lastYawAdjustmentTime = currentTimeMs;
+        posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
     }
 
     if (currentTimeMs - posControl.cruise.lastYawAdjustmentTime > 4000)
@@ -1052,6 +1058,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_CRUISE_2D_ADJUSTING(nav
     if (posControl.flags.isAdjustingPosition) {
         posControl.cruise.yaw = posControl.actualState.yaw; //store current heading
         posControl.cruise.lastYawAdjustmentTime = millis();
+        posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
         return NAV_FSM_EVENT_NONE;  // reprocess the state
     }
 
@@ -1173,6 +1180,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_CLIMB_TO_SAFE_ALT(n
             // Save initial home distance for future use
             posControl.rthState.rthInitialDistance = posControl.homeDistance;
             fpVector3_t * tmpHomePos = rthGetHomeTargetPosition(RTH_HOME_ENROUTE_INITIAL);
+            posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
 
             if (navConfig()->general.flags.rth_tail_first && !STATE(FIXED_WING)) {
                 setDesiredPosition(tmpHomePos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_Z | NAV_POS_UPDATE_BEARING_TAIL_FIRST);
@@ -1427,6 +1435,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_INITIALIZE(nav
         resetAltitudeController(false);
         setupAltitudeController();
 
+        posControl.wpInitialPos = navGetCurrentActualPositionAndVelocity()->pos;
         posControl.wpInitialYaw = posControl.actualState.yaw;
 
         posControl.activeWaypointIndex = 0;
@@ -1529,6 +1538,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(naviga
 {
     UNUSED(previousState);
 
+    posControl.wpInitialPos = posControl.activeWaypoint.pos;
     posControl.wpInitialYaw = ABS(posControl.waypointList[posControl.activeWaypointIndex-1].p3) * 100;
 
     switch (posControl.waypointList[posControl.activeWaypointIndex].action) {
@@ -3464,7 +3474,10 @@ bool navigationRTHAllowsLanding(void)
 {
     navRTHAllowLanding_e allow = navConfig()->general.flags.rth_allow_landing;
     return allow == NAV_RTH_ALLOW_LANDING_ALWAYS ||
-        (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE));
+           allow == NAV_RTH_ALLOW_LANDING_APROACH ||
+          (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY && FLIGHT_MODE(FAILSAFE_MODE)) ||
+          (allow == NAV_RTH_ALLOW_LANDING_FS_ONLY_APR && FLIGHT_MODE(FAILSAFE_MODE)) ||
+           allow == NAV_RTH_ALLOW_LANDING_FS_NO_APR;
 }
 
 bool FAST_CODE isNavLaunchEnabled(void)
