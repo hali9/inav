@@ -43,6 +43,7 @@ extern uint8_t __config_end;
 #include "common/memory.h"
 #include "common/time.h"
 #include "common/typeconversion.h"
+#include "common/global_functions.h"
 
 #include "config/config_eeprom.h"
 #include "config/feature.h"
@@ -50,21 +51,22 @@ extern uint8_t __config_end;
 #include "config/parameter_group_ids.h"
 
 #include "drivers/accgyro/accgyro.h"
+#include "drivers/pwm_mapping.h"
 #include "drivers/buf_writer.h"
 #include "drivers/bus_i2c.h"
 #include "drivers/compass/compass.h"
 #include "drivers/io.h"
 #include "drivers/io_impl.h"
-#include "drivers/logging.h"
 #include "drivers/osd_symbols.h"
 #include "drivers/rx_pwm.h"
-#include "drivers/sdcard.h"
+#include "drivers/sdcard/sdcard.h"
 #include "drivers/sensor.h"
 #include "drivers/serial.h"
 #include "drivers/stack_check.h"
 #include "drivers/system.h"
 #include "drivers/time.h"
 #include "drivers/timer.h"
+#include "drivers/usb_msc.h"
 
 #include "fc/fc_core.h"
 #include "fc/cli.h"
@@ -135,18 +137,19 @@ static uint32_t bufferIndex = 0;
 static void cliAssert(char *cmdline);
 #endif
 
-#if defined(USE_BOOTLOG)
-static void cliBootlog(char *cmdline);
+#ifdef USE_CLI_BATCH
+static bool commandBatchActive = false;
+static bool commandBatchError = false;
 #endif
 
 // sync this with features_e
 static const char * const featureNames[] = {
     "THR_VBAT_COMP", "VBAT", "TX_PROF_SEL", "BAT_PROF_AUTOSWITCH", "MOTOR_STOP",
-    "", "SOFTSERIAL", "GPS", "",
-    "", "TELEMETRY", "CURRENT_METER", "3D", "RX_PARALLEL_PWM",
-    "RX_MSP", "RSSI_ADC", "LED_STRIP", "DASHBOARD", "",
+    "DYNAMIC_FILTERS", "SOFTSERIAL", "GPS", "RPM_FILTERS",
+    "", "TELEMETRY", "CURRENT_METER", "3D", "",
+    "", "RSSI_ADC", "LED_STRIP", "DASHBOARD", "",
     "BLACKBOX", "", "TRANSPONDER", "AIRMODE",
-    "SUPEREXPO", "VTX", "RX_SPI", "", "PWM_SERVO_DRIVER", "PWM_OUTPUT_ENABLE",
+    "SUPEREXPO", "VTX", "", "", "PWM_SERVO_DRIVER", "PWM_OUTPUT_ENABLE",
     "OSD", "FW_LAUNCH", NULL
 };
 
@@ -188,7 +191,7 @@ static const char * const *sensorHardwareNames[] = {
 #else
         NULL,
 #endif
-#ifdef USE_OPTICAL_FLOW
+#ifdef USE_OPFLOW
         table_opflow_hardware,
 #else
         NULL,
@@ -211,6 +214,28 @@ static void cliPrintLine(const char *str)
 {
     cliPrint(str);
     cliPrintLinefeed();
+}
+
+static void cliPrintError(const char *str)
+{
+    cliPrint("### ERROR: ");
+    cliPrint(str);
+#ifdef USE_CLI_BATCH
+    if (commandBatchActive) {
+        commandBatchError = true;
+    }
+#endif
+}
+
+static void cliPrintErrorLine(const char *str)
+{
+    cliPrint("### ERROR: ");
+    cliPrintLine(str);
+#ifdef USE_CLI_BATCH
+    if (commandBatchActive) {
+        commandBatchError = true;
+    }
+#endif
 }
 
 #ifdef CLI_MINIMAL_VERBOSITY
@@ -302,6 +327,27 @@ static void cliPrintLinef(const char *format, ...)
     va_end(va);
 }
 
+static void cliPrintErrorVa(const char *format, va_list va)
+{
+    cliPrint("### ERROR: ");
+    cliPrintfva(format, va);
+    va_end(va);
+
+#ifdef USE_CLI_BATCH
+    if (commandBatchActive) {
+        commandBatchError = true;
+    }
+#endif
+}
+
+static void cliPrintErrorLinef(const char *format, ...)
+{
+    va_list va;
+    va_start(va, format);
+    cliPrintErrorVa(format, va);
+    cliPrintLinefeed();
+}
+
 static void printValuePointer(const setting_t *var, const void *valuePointer, uint32_t full)
 {
     int32_t value = 0;
@@ -362,7 +408,7 @@ static void printValuePointer(const setting_t *var, const void *valuePointer, ui
             cliPrintf(name);
         } else {
             settingGetName(var, buf);
-            cliPrintLinef("VALUE %d OUT OF RANGE FOR %s", (int)value, buf);
+            cliPrintErrorLinef("VALUE %d OUT OF RANGE FOR %s", (int)value, buf);
         }
         break;
     }
@@ -516,12 +562,12 @@ static void cliPrompt(void)
 
 static void cliShowParseError(void)
 {
-    cliPrintLine("Parse error");
+    cliPrintErrorLinef("Parse error");
 }
 
 static void cliShowArgumentRangeError(char *name, int min, int max)
 {
-    cliPrintLinef("%s must be between %d and %d", name, min, max);
+    cliPrintErrorLinef("%s must be between %d and %d", name, min, max);
 }
 
 static const char *nextArg(const char *currentArg)
@@ -568,54 +614,19 @@ static void cliAssert(char *cmdline)
 
     if (assertFailureLine) {
         if (assertFailureFile) {
-            cliPrintLinef("Assertion failed at line %d, file %s", assertFailureLine, assertFailureFile);
+            cliPrintErrorLinef("Assertion failed at line %d, file %s", assertFailureLine, assertFailureFile);
         }
         else {
-            cliPrintLinef("Assertion failed at line %d", assertFailureLine);
+            cliPrintErrorLinef("Assertion failed at line %d", assertFailureLine);
         }
+#ifdef USE_CLI_BATCH
+        if (commandBatchActive) {
+            commandBatchError = true;
+        }
+#endif
     }
     else {
         cliPrintLine("No assert() failed");
-    }
-}
-#endif
-
-#if defined(USE_BOOTLOG)
-static void cliBootlog(char *cmdline)
-{
-    UNUSED(cmdline);
-
-    int bootEventCount = getBootlogEventCount();
-
-#if defined(BOOTLOG_DESCRIPTIONS)
-    cliPrintLine("Time Evt            Description  Parameters");
-#else
-    cliPrintLine("Time Evt Parameters");
-#endif
-
-    for (int idx = 0; idx < bootEventCount; idx++) {
-        bootLogEntry_t * event = getBootlogEvent(idx);
-
-#if defined(BOOTLOG_DESCRIPTIONS)
-        const char * eventDescription = getBootlogEventDescription(event->eventCode);
-        if (!eventDescription) {
-            eventDescription = "";
-        }
-
-        cliPrintf("%4d: %2d %22s ", event->timestamp, event->eventCode, eventDescription);
-#else
-        cliPrintf("%4d: %2d ", event->timestamp, event->eventCode);
-#endif
-
-        if (event->eventFlags & BOOT_EVENT_FLAGS_PARAM16) {
-            cliPrintLinef(" (%d, %d, %d, %d)", event->params.u16[0], event->params.u16[1], event->params.u16[2], event->params.u16[3]);
-        }
-        else if (event->eventFlags & BOOT_EVENT_FLAGS_PARAM32) {
-            cliPrintLinef(" (%d, %d)", event->params.u32[0], event->params.u32[1]);
-        }
-        else {
-            cliPrintLinefeed();
-        }
     }
 }
 #endif
@@ -733,7 +744,6 @@ static void cliSerial(char *cmdline)
         return;
     }
     serialPortConfig_t portConfig;
-    memset(&portConfig, 0 , sizeof(portConfig));
 
     serialPortConfig_t *currentConfig;
 
@@ -743,15 +753,35 @@ static void cliSerial(char *cmdline)
 
     int val = fastA2I(ptr++);
     currentConfig = serialFindPortConfiguration(val);
-    if (currentConfig) {
-        portConfig.identifier = val;
-        validArgumentCount++;
+    if (!currentConfig) {
+        // Invalid port ID
+        cliPrintErrorLinef("Invalid port ID %d", val);
+        return;
     }
+    memcpy(&portConfig, currentConfig, sizeof(portConfig));
+    validArgumentCount++;
 
     ptr = nextArg(ptr);
     if (ptr) {
-        val = fastA2I(ptr);
-        portConfig.functionMask = val & 0xFFFFFFFF;
+        switch (*ptr) {
+            case '+':
+                // Add function
+                ptr++;
+                val = fastA2I(ptr);
+                portConfig.functionMask |= (1 << val);
+                break;
+            case '-':
+                // Remove function
+                ptr++;
+                val = fastA2I(ptr);
+                portConfig.functionMask &= 0xFFFFFFFF ^ (1 << val);
+                break;
+            default:
+                // Set functions
+                val = fastA2I(ptr);
+                portConfig.functionMask = val & 0xFFFFFFFF;
+                break;
+        }
         validArgumentCount++;
     }
 
@@ -798,7 +828,7 @@ static void cliSerial(char *cmdline)
         validArgumentCount++;
     }
 
-    if (validArgumentCount < 6) {
+    if (validArgumentCount < 2) {
         cliShowParseError();
         return;
     }
@@ -845,7 +875,7 @@ static void cliSerialPassthrough(char *cmdline)
     serialPortUsage_t *passThroughPortUsage = findSerialPortUsageByIdentifier(id);
     if (!passThroughPortUsage || passThroughPortUsage->serialPort == NULL) {
         if (!baud) {
-            printf("Port %d is closed, must specify baud.\r\n", id);
+            tfp_printf("Port %d is closed, must specify baud.\r\n", id);
             return;
         }
         if (!mode)
@@ -855,29 +885,29 @@ static void cliSerialPassthrough(char *cmdline)
                                          baud, mode,
                                          SERIAL_NOT_INVERTED);
         if (!passThroughPort) {
-            printf("Port %d could not be opened.\r\n", id);
+            tfp_printf("Port %d could not be opened.\r\n", id);
             return;
         }
-        printf("Port %d opened, baud = %d.\r\n", id, baud);
+        tfp_printf("Port %d opened, baud = %u.\r\n", id, (unsigned)baud);
     } else {
         passThroughPort = passThroughPortUsage->serialPort;
         // If the user supplied a mode, override the port's mode, otherwise
         // leave the mode unchanged. serialPassthrough() handles one-way ports.
-        printf("Port %d already open.\r\n", id);
+        tfp_printf("Port %d already open.\r\n", id);
         if (mode && passThroughPort->mode != mode) {
-            printf("Adjusting mode from %d to %d.\r\n",
+            tfp_printf("Adjusting mode from %d to %d.\r\n",
                    passThroughPort->mode, mode);
             serialSetMode(passThroughPort, mode);
         }
         // If this port has a rx callback associated we need to remove it now.
         // Otherwise no data will be pushed in the serial port buffer!
         if (passThroughPort->rxCallback) {
-            printf("Removing rxCallback\r\n");
+            tfp_printf("Removing rxCallback\r\n");
             passThroughPort->rxCallback = 0;
         }
     }
 
-    printf("Forwarding data to %d, power cycle to exit.\r\n", id);
+    tfp_printf("Forwarding data to %d, power cycle to exit.\r\n", id);
 
     serialPassthrough(cliPort, passThroughPort, NULL, NULL);
 }
@@ -1129,6 +1159,62 @@ static void cliRxRange(char *cmdline)
     }
 }
 
+static void printRxAux(uint8_t dumpMask, const int16_t *channelAuxConfigs, const int16_t *defaultChannelAuxConfigs)
+{
+    const char *format = "rxaux %u %d";
+    for (uint8_t i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+        bool equalsDefault = false;
+        if (defaultChannelAuxConfigs) {
+            equalsDefault = channelAuxConfigs[i] == defaultChannelAuxConfigs[i];
+            cliDefaultPrintLinef(dumpMask, equalsDefault, format,
+                i,
+                defaultChannelAuxConfigs[i]
+            );
+        }
+        cliDumpPrintLinef(dumpMask, equalsDefault, format,
+            i,
+            channelAuxConfigs[i]
+        );
+    }
+}
+
+static void cliRxAux(char *cmdline)
+{
+    int i, validArgumentCount = 0;
+    const char *ptr;
+
+    if (isEmpty(cmdline)) {
+	printRxAux(DUMP_MASTER, rxChannelAuxConfigs(0), NULL);
+    } else if (sl_strcasecmp(cmdline, "reset") == 0) {
+	for (int i = 0; i < MAX_AUX_CHANNEL_COUNT; i++) {
+            (*rxChannelAuxConfigsMutable(i)) = 0;
+        }
+    } else {
+        ptr = cmdline;
+        i = fastA2I(ptr);
+        if (i >= 0 && i < MAX_AUX_CHANNEL_COUNT) {
+            int auxValue;
+
+            ptr = nextArg(ptr);
+            if (ptr) {
+                auxValue = fastA2I(ptr);
+                validArgumentCount++;
+            }
+
+            if (validArgumentCount != 1) {
+                cliShowParseError();
+            } else if ((PWM_PULSE_MIN <= auxValue && auxValue <= PWM_PULSE_MAX) || auxValue == 1
+		    || (-PWM_PULSE_MAX <= auxValue && auxValue <= -PWM_PULSE_MIN) || auxValue == 0) {
+                (*rxChannelAuxConfigsMutable(i)) = auxValue;
+            } else {
+                cliShowParseError();
+            }
+        } else {
+            cliShowArgumentRangeError("channel", 0, MAX_AUX_CHANNEL_COUNT - 1);
+        }
+    }
+}
+
 #ifdef USE_TEMPERATURE_SENSOR
 static void printTempSensor(uint8_t dumpMask, const tempSensorConfig_t *tempSensorConfigs, const tempSensorConfig_t *defaultTempSensorConfigs)
 {
@@ -1232,7 +1318,7 @@ static void cliTempSensor(char *cmdline)
                 sensorConfig->alarm_min = alarm_min;
                 sensorConfig->alarm_max = alarm_max;
                 sensorConfig->osdSymbol = osdSymbol;
-                for (uint8_t index; index < TEMPERATURE_LABEL_LEN; ++index) {
+                for (uint8_t index = 0; index < TEMPERATURE_LABEL_LEN; ++index) {
                     sensorConfig->label[index] = toupper(label[index]);
                     if (label[index] == '\0') break;
                 }
@@ -1248,7 +1334,7 @@ static void cliTempSensor(char *cmdline)
 static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, const navWaypoint_t *defaultNavWaypoint)
 {
     cliPrintLinef("#wp %d %svalid", posControl.waypointCount, posControl.waypointListValid ? "" : "in"); //int8_t bool
-    const char *format = "wp %u %u %d %d %d %d %u"; //uint8_t action; int32_t lat; int32_t lon; int32_t alt; int16_t p1; uint8_t flag
+    const char *format = "wp %u %u %d %d %d %d %d %u"; //uint8_t action; int32_t lat; int32_t lon; int32_t alt; int16_t p1; uint8_t flag
     for (uint8_t i = 0; i < NAV_MAX_WAYPOINTS; i++) {
         bool equalsDefault = false;
         if (defaultNavWaypoint) {
@@ -1257,6 +1343,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
                 && navWaypoint[i].lon == defaultNavWaypoint[i].lon
                 && navWaypoint[i].alt == defaultNavWaypoint[i].alt
                 && navWaypoint[i].p1 == defaultNavWaypoint[i].p1
+                && navWaypoint[i].p3 == defaultNavWaypoint[i].p3
                 && navWaypoint[i].flag == defaultNavWaypoint[i].flag;
             cliDefaultPrintLinef(dumpMask, equalsDefault, format,
                 i,
@@ -1265,6 +1352,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
                 defaultNavWaypoint[i].lon,
                 defaultNavWaypoint[i].alt,
                 defaultNavWaypoint[i].p1,
+                defaultNavWaypoint[i].p3,
                 defaultNavWaypoint[i].flag
             );
         }
@@ -1275,6 +1363,7 @@ static void printWaypoints(uint8_t dumpMask, const navWaypoint_t *navWaypoint, c
             navWaypoint[i].lon,
             navWaypoint[i].alt,
             navWaypoint[i].p1,
+            navWaypoint[i].p3,
             navWaypoint[i].flag
         );
     }
@@ -1306,7 +1395,7 @@ static void cliWaypoints(char *cmdline)
             cliShowParseError();
         }
     } else {
-        int16_t i, p1;
+        int16_t i, p1, p3;
         uint8_t action, flag;
         int32_t lat, lon, alt;
         uint8_t validArgumentCount = 0;
@@ -1340,10 +1429,15 @@ static void cliWaypoints(char *cmdline)
             }
             ptr = nextArg(ptr);
             if (ptr) {
+                p3 = fastA2I(ptr);
+                validArgumentCount++;
+            }
+            ptr = nextArg(ptr);
+            if (ptr) {
                 flag = fastA2I(ptr);
                 validArgumentCount++;
             }
-            if (validArgumentCount < 4) {
+            if (validArgumentCount < 7) {
                 cliShowParseError();
             } else if (!(action == 0 || action == NAV_WP_ACTION_WAYPOINT || action == NAV_WP_ACTION_RTH || action == NAV_WP_ACTION_RELATIVE)
                     || (p1 < 0) 
@@ -1356,6 +1450,7 @@ static void cliWaypoints(char *cmdline)
                 posControl.waypointList[i].lon = lon;
                 posControl.waypointList[i].alt = alt;
                 posControl.waypointList[i].p1 = p1;
+                posControl.waypointList[i].p3 = p3;
                 posControl.waypointList[i].flag = flag;
             }
         } else {
@@ -1588,8 +1683,8 @@ static void cliServo(char *cmdline)
         servo = servoParamsMutable(i);
 
         if (
-            arguments[MIN] < PWM_PULSE_MIN || arguments[MIN] > PWM_PULSE_MAX ||
-            arguments[MAX] < PWM_PULSE_MIN || arguments[MAX] > PWM_PULSE_MAX ||
+            arguments[MIN] < SERVO_OUTPUT_MIN || arguments[MIN] > SERVO_OUTPUT_MAX ||
+            arguments[MAX] < SERVO_OUTPUT_MIN || arguments[MAX] > SERVO_OUTPUT_MAX ||
             arguments[MIDDLE] < arguments[MIN] || arguments[MIDDLE] > arguments[MAX] ||
             arguments[MIN] > arguments[MAX] || arguments[MAX] < arguments[MIN] ||
             arguments[RATE] < -125 || arguments[RATE] > 125
@@ -1668,12 +1763,13 @@ static void cliServoMix(char *cmdline)
     } else {
         enum {RULE = 0, TARGET, INPUT, RATE, SPEED, CONDITION, ARGS_COUNT};
         char *ptr = strtok_r(cmdline, " ", &saveptr);
+        args[CONDITION] = -1;
         while (ptr != NULL && check < ARGS_COUNT) {
             args[check++] = fastA2I(ptr);
             ptr = strtok_r(NULL, " ", &saveptr);
         }
 
-        if (ptr != NULL || check != ARGS_COUNT) {
+        if (ptr != NULL || (check < ARGS_COUNT - 1)) {
             cliShowParseError();
             return;
         }
@@ -1708,11 +1804,11 @@ static void printLogic(uint8_t dumpMask, const logicCondition_t *logicConditions
     const char *format = "logic %d %d %d %d %d %d %d %d";
     for (uint32_t i = 0; i < MAX_LOGIC_CONDITIONS; i++) {
         const logicCondition_t logic = logicConditions[i];
-        
+
         bool equalsDefault = false;
         if (defaultLogicConditions) {
             logicCondition_t defaultValue = defaultLogicConditions[i];
-            equalsDefault = 
+            equalsDefault =
                 logic.enabled == defaultValue.enabled &&
                 logic.operation == defaultValue.operation &&
                 logic.operandA.type == defaultValue.operandA.type &&
@@ -1753,15 +1849,15 @@ static void cliLogic(char *cmdline) {
     if (len == 0) {
         printLogic(DUMP_MASTER, logicConditions(0), NULL);
     } else if (sl_strncasecmp(cmdline, "reset", 5) == 0) {
-        pgResetCopy(logicConditionsMutable(0), PG_SERVO_MIXER);
+        pgResetCopy(logicConditionsMutable(0), PG_LOGIC_CONDITIONS);
     } else {
         enum {
             INDEX = 0,
             ENABLED,
             OPERATION,
-            OPERAND_A_TYPE, 
+            OPERAND_A_TYPE,
             OPERAND_A_VALUE,
-            OPERAND_B_TYPE, 
+            OPERAND_B_TYPE,
             OPERAND_B_VALUE,
             FLAGS,
             ARGS_COUNT
@@ -1787,7 +1883,7 @@ static void cliLogic(char *cmdline) {
             args[OPERAND_B_TYPE] >= 0 && args[OPERAND_B_TYPE] < LOGIC_CONDITION_OPERAND_TYPE_LAST &&
             args[OPERAND_B_VALUE] >= -1000000 && args[OPERAND_B_VALUE] <= 1000000 &&
             args[FLAGS] >= 0 && args[FLAGS] <= 255
-        
+
         ) {
             logicConditionsMutable(i)->enabled = args[ENABLED];
             logicConditionsMutable(i)->operation = args[OPERATION];
@@ -1798,6 +1894,104 @@ static void cliLogic(char *cmdline) {
             logicConditionsMutable(i)->flags = args[FLAGS];
 
             cliLogic("");
+        } else {
+            cliShowParseError();
+        }
+    }
+}
+#endif
+
+#ifdef USE_GLOBAL_FUNCTIONS
+
+static void printGlobalFunctions(uint8_t dumpMask, const globalFunction_t *globalFunctions, const globalFunction_t *defaultGlobalFunctions)
+{
+    const char *format = "gf %d %d %d %d %d %d %d";
+    for (uint32_t i = 0; i < MAX_GLOBAL_FUNCTIONS; i++) {
+        const globalFunction_t gf = globalFunctions[i];
+
+        bool equalsDefault = false;
+        if (defaultGlobalFunctions) {
+            globalFunction_t defaultValue = defaultGlobalFunctions[i];
+            equalsDefault =
+                gf.enabled == defaultValue.enabled &&
+                gf.conditionId == defaultValue.conditionId &&
+                gf.action == defaultValue.action &&
+                gf.withValue.type == defaultValue.withValue.type &&
+                gf.withValue.value == defaultValue.withValue.value &&
+                gf.flags == defaultValue.flags;
+
+            cliDefaultPrintLinef(dumpMask, equalsDefault, format,
+                i,
+                gf.enabled,
+                gf.conditionId,
+                gf.action,
+                gf.withValue.type,
+                gf.withValue.value,
+                gf.flags
+            );
+        }
+        cliDumpPrintLinef(dumpMask, equalsDefault, format,
+            i,
+            gf.enabled,
+            gf.conditionId,
+            gf.action,
+            gf.withValue.type,
+            gf.withValue.value,
+            gf.flags
+        );
+    }
+}
+
+static void cliGlobalFunctions(char *cmdline) {
+    char * saveptr;
+    int args[7], check = 0;
+    uint8_t len = strlen(cmdline);
+
+    if (len == 0) {
+        printGlobalFunctions(DUMP_MASTER, globalFunctions(0), NULL);
+    } else if (sl_strncasecmp(cmdline, "reset", 5) == 0) {
+        pgResetCopy(globalFunctionsMutable(0), PG_GLOBAL_FUNCTIONS);
+    } else {
+        enum {
+            INDEX = 0,
+            ENABLED,
+            CONDITION_ID,
+            ACTION,
+            VALUE_TYPE,
+            VALUE_VALUE,
+            FLAGS,
+            ARGS_COUNT
+            };
+        char *ptr = strtok_r(cmdline, " ", &saveptr);
+        while (ptr != NULL && check < ARGS_COUNT) {
+            args[check++] = fastA2I(ptr);
+            ptr = strtok_r(NULL, " ", &saveptr);
+        }
+
+        if (ptr != NULL || check != ARGS_COUNT) {
+            cliShowParseError();
+            return;
+        }
+
+        int32_t i = args[INDEX];
+        if (
+            i >= 0 && i < MAX_GLOBAL_FUNCTIONS &&
+            args[ENABLED] >= 0 && args[ENABLED] <= 1 &&
+            args[CONDITION_ID] >= 0 && args[CONDITION_ID] < MAX_LOGIC_CONDITIONS &&
+            args[ACTION] >= 0 && args[ACTION] < GLOBAL_FUNCTION_ACTION_LAST &&
+            args[VALUE_TYPE] >= 0 && args[VALUE_TYPE] < LOGIC_CONDITION_OPERAND_TYPE_LAST &&
+            args[VALUE_VALUE] >= -1000000 && args[VALUE_VALUE] <= 1000000 &&
+            args[FLAGS] >= 0 && args[FLAGS] <= 255
+
+        ) {
+            globalFunctionsMutable(i)->enabled = args[ENABLED];
+            globalFunctionsMutable(i)->conditionId = args[CONDITION_ID];
+            globalFunctionsMutable(i)->action = args[ACTION];
+            globalFunctionsMutable(i)->withValue.type = args[VALUE_TYPE];
+            globalFunctionsMutable(i)->withValue.value = args[VALUE_VALUE];
+            globalFunctionsMutable(i)->flags = args[FLAGS];
+
+            cliGlobalFunctions("");
         } else {
             cliShowParseError();
         }
@@ -2144,7 +2338,7 @@ static void cliFeature(char *cmdline)
 
         for (uint32_t i = 0; ; i++) {
             if (featureNames[i] == NULL) {
-                cliPrintLine("Invalid name");
+                cliPrintErrorLine("Invalid name");
                 break;
             }
 
@@ -2153,7 +2347,7 @@ static void cliFeature(char *cmdline)
                 mask = 1 << i;
 #ifndef USE_GPS
                 if (mask & FEATURE_GPS) {
-                    cliPrintLine("unavailable");
+                    cliPrintErrorLine("unavailable");
                     break;
                 }
 #endif
@@ -2219,7 +2413,7 @@ static void cliBeeper(char *cmdline)
 
         for (uint32_t i = 0; ; i++) {
             if (i == beeperCount) {
-                cliPrintLine("Invalid name");
+                cliPrintErrorLine("Invalid name");
                 break;
             }
             if (sl_strncasecmp(cmdline, beeperNameForTableIndex(i), len) == 0) {
@@ -2524,9 +2718,53 @@ static void cliDumpBatteryProfile(uint8_t profileIndex, uint8_t dumpMask)
     dumpAllValues(BATTERY_CONFIG_VALUE, dumpMask);
 }
 
+#ifdef USE_CLI_BATCH
+static void cliPrintCommandBatchWarning(const char *warning)
+{
+    cliPrintErrorLinef("ERRORS WERE DETECTED - PLEASE REVIEW BEFORE CONTINUING");
+    if (warning) {
+        cliPrintErrorLinef(warning);
+    }
+}
+
+static void resetCommandBatch(void)
+{
+    commandBatchActive = false;
+    commandBatchError = false;
+}
+
+static void cliBatch(char *cmdline)
+{
+    if (strncasecmp(cmdline, "start", 5) == 0) {
+        if (!commandBatchActive) {
+            commandBatchActive = true;
+            commandBatchError = false;
+        }
+        cliPrintLine("Command batch started");
+    } else if (strncasecmp(cmdline, "end", 3) == 0) {
+        if (commandBatchActive && commandBatchError) {
+            cliPrintCommandBatchWarning(NULL);
+        } else {
+            cliPrintLine("Command batch ended");
+        }
+        resetCommandBatch();
+    } else {
+        cliPrintErrorLinef("Invalid option");
+    }
+}
+#endif
+
 static void cliSave(char *cmdline)
 {
     UNUSED(cmdline);
+
+#ifdef USE_CLI_BATCH
+    if (commandBatchActive && commandBatchError) {
+        cliPrintCommandBatchWarning("PLEASE FIX ERRORS THEN 'SAVE'");
+        resetCommandBatch();
+        return;
+    }
+#endif
 
     cliPrint("Saving");
     //copyCurrentProfileToProfileSlot(getConfigProfile();
@@ -2541,6 +2779,10 @@ static void cliDefaults(char *cmdline)
     cliPrint("Resetting to defaults");
     resetEEPROM();
 
+#ifdef USE_CLI_BATCH
+    commandBatchError = false;
+#endif
+
     if (!checkCommand(cmdline, "noreboot"))
         cliReboot();
 }
@@ -2550,6 +2792,8 @@ static void cliGet(char *cmdline)
     const setting_t *val;
     int matchedCommands = 0;
     char name[SETTING_MAX_NAME_LENGTH];
+
+    while(*cmdline == ' ') ++cmdline; // ignore spaces
 
     for (uint32_t i = 0; i < SETTINGS_TABLE_COUNT; i++) {
         val = settingGet(i);
@@ -2569,7 +2813,7 @@ static void cliGet(char *cmdline)
         return;
     }
 
-    cliPrintLine("Invalid name");
+    cliPrintErrorLine("Invalid name");
 }
 
 static void cliSet(char *cmdline)
@@ -2578,6 +2822,8 @@ static void cliSet(char *cmdline)
     const setting_t *val;
     char *eqptr = NULL;
     char name[SETTING_MAX_NAME_LENGTH];
+
+    while(*cmdline == ' ') ++cmdline; // ignore spaces
 
     len = strlen(cmdline);
 
@@ -2657,7 +2903,7 @@ static void cliSet(char *cmdline)
                     cliPrintf("%s set to ", name);
                     cliPrintVar(val, 0);
                 } else {
-                    cliPrint("Invalid value. ");
+                    cliPrintError("Invalid value. ");
                     cliPrintVarRange(val);
                     cliPrintLinefeed();
                 }
@@ -2665,7 +2911,7 @@ static void cliSet(char *cmdline)
                 return;
             }
         }
-        cliPrintLine("Invalid name");
+        cliPrintErrorLine("Invalid name");
     } else {
         // no equals, check for matching variables.
         cliGet(cmdline);
@@ -2792,12 +3038,17 @@ static void cliStatus(char *cmdline)
         unsigned invalidIndex;
         if (!settingsValidate(&invalidIndex)) {
             settingGetName(settingGet(invalidIndex), buf);
-            cliPrintLinef("Invalid setting: %s", buf);
+            cliPrintErrorLinef("Invalid setting: %s", buf);
         }
     }
 #else
     cliPrintLinef("Arming disabled flags: 0x%lx", armingFlags & ARMING_DISABLED_ALL_FLAGS);
 #endif
+
+    // If we are blocked by PWM init - provide more information
+    if (getPwmInitError() != PWM_INIT_ERROR_NONE) {
+        cliPrintLinef("PWM output init error: %s", getPwmInitErrorMessage());
+    }
 }
 
 #ifndef SKIP_TASK_STATISTICS
@@ -2939,9 +3190,19 @@ static void printConfig(const char *cmdline, bool doDiff)
         dumpMask = dumpMask | SHOW_DEFAULTS;   // add default values as comments for changed values
     }
 
+#ifdef USE_CLI_BATCH
+    bool batchModeEnabled = false;
+#endif
+
     if ((dumpMask & DUMP_MASTER) || (dumpMask & DUMP_ALL)) {
         cliPrintHashLine("version");
         cliVersion(NULL);
+
+#ifdef USE_CLI_BATCH
+        cliPrintHashLine("start the command batch");
+        cliPrintLine("batch start");
+        batchModeEnabled = true;
+#endif
 
         if ((dumpMask & (DUMP_ALL | DO_DIFF)) == (DUMP_ALL | DO_DIFF)) {
 #ifndef CLI_MINIMAL_VERBOSITY
@@ -2971,6 +3232,11 @@ static void printConfig(const char *cmdline, bool doDiff)
 #ifdef USE_LOGIC_CONDITIONS
         cliPrintHashLine("logic");
         printLogic(dumpMask, logicConditions_CopyArray, logicConditions(0));
+#endif
+
+#ifdef USE_GLOBAL_FUNCTIONS
+        cliPrintHashLine("gf");
+        printGlobalFunctions(dumpMask, globalFunctions_CopyArray, globalFunctions(0));
 #endif
 
         cliPrintHashLine("feature");
@@ -3004,6 +3270,9 @@ static void printConfig(const char *cmdline, bool doDiff)
         cliPrintHashLine("adjrange");
         printAdjustmentRange(dumpMask, adjustmentRanges_CopyArray, adjustmentRanges(0));
 
+	cliPrintHashLine("rxaux");
+        printRxAux(dumpMask, rxChannelAuxConfigs_CopyArray, rxChannelAuxConfigs(0));
+	    
         cliPrintHashLine("rxrange");
         printRxRange(dumpMask, rxChannelRangeConfigs_CopyArray, rxChannelRangeConfigs(0));
 
@@ -3043,6 +3312,9 @@ static void printConfig(const char *cmdline, bool doDiff)
             cliPrintLinef("battery_profile %d", currentBatteryProfileIndexSave + 1);
 
             cliPrintHashLine("save configuration\r\nsave");
+#ifdef USE_CLI_BATCH
+            batchModeEnabled = false;
+#endif
         } else {
             // dump just the current profiles
             cliDumpProfile(getConfigProfile(), dumpMask);
@@ -3057,6 +3329,14 @@ static void printConfig(const char *cmdline, bool doDiff)
     if (dumpMask & DUMP_BATTERY_PROFILE) {
         cliDumpBatteryProfile(getConfigBatteryProfile(), dumpMask);
     }
+
+#ifdef USE_CLI_BATCH
+    if (batchModeEnabled) {
+        cliPrintHashLine("end the command batch");
+        cliPrintLine("batch end");
+    }
+#endif
+
     // restore configs from copies
     restoreConfigs();
 }
@@ -3070,6 +3350,42 @@ static void cliDiff(char *cmdline)
 {
     printConfig(cmdline, true);
 }
+
+#ifdef USE_USB_MSC
+static void cliMsc(char *cmdline)
+{
+    UNUSED(cmdline);
+
+    if (false
+#ifdef USE_SDCARD
+        || sdcard_isFunctional()
+#endif
+#ifdef USE_FLASHFS
+        || flashfsGetSize() > 0
+#endif
+    ) {
+        cliPrintHashLine("restarting in mass storage mode");
+        cliPrint("\r\nRebooting");
+        bufWriterFlush(cliWriter);
+        delay(1000);
+        waitForSerialPortToFinishTransmitting(cliPort);
+        stopPwmAllMotors();
+
+#ifdef STM32F7
+        *((__IO uint32_t*) BKPSRAM_BASE + 16) = MSC_MAGIC;
+#elif defined(STM32F4)
+        *((uint32_t *)0x2001FFF0) = MSC_MAGIC;
+#endif
+
+        __disable_irq();
+        NVIC_SystemReset();
+    } else {
+        cliPrint("\r\nStorage not present or failed to initialize!");
+        bufWriterFlush(cliWriter);
+    }
+}
+#endif
+
 
 typedef struct {
     const char *name;
@@ -3105,6 +3421,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("assert", "", NULL, cliAssert),
 #endif
     CLI_COMMAND_DEF("aux", "configure modes", NULL, cliAux),
+#ifdef USE_CLI_BATCH
+    CLI_COMMAND_DEF("batch", "start or end a batch of commands", "start | end", cliBatch),
+#endif
 #ifdef BEEPER
     CLI_COMMAND_DEF("beeper", "turn on/off beeper", "list\r\n"
             "\t<+|->[name]", cliBeeper),
@@ -3149,6 +3468,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("memory", "view memory usage", NULL, cliMemory),
     CLI_COMMAND_DEF("mmix", "custom motor mixer", NULL, cliMotorMix),
     CLI_COMMAND_DEF("motor",  "get/set motor", "<index> [<value>]", cliMotor),
+#ifdef USE_USB_MSC
+    CLI_COMMAND_DEF("msc", "switch into msc mode", NULL, cliMsc),
+#endif
 #ifdef PLAY_SOUND
     CLI_COMMAND_DEF("play_sound", NULL, "[<index>]\r\n", cliPlaySound),
 #endif
@@ -3159,6 +3481,7 @@ const clicmd_t cmdTable[] = {
 #if !defined(SKIP_TASK_STATISTICS) && !defined(SKIP_CLI_RESOURCES)
     CLI_COMMAND_DEF("resource", "view currently used resources", NULL, cliResource),
 #endif
+    CLI_COMMAND_DEF("rxaux", "configure rx aux failsafe", NULL, cliRxAux),
     CLI_COMMAND_DEF("rxrange", "configure rx channel ranges", NULL, cliRxRange),
     CLI_COMMAND_DEF("save", "save and reboot", NULL, cliSave),
     CLI_COMMAND_DEF("serial", "configure serial ports", NULL, cliSerial),
@@ -3167,9 +3490,14 @@ const clicmd_t cmdTable[] = {
 #endif
     CLI_COMMAND_DEF("servo", "configure servos", NULL, cliServo),
 #ifdef USE_LOGIC_CONDITIONS
-    CLI_COMMAND_DEF("logic", "configure logic conditions", 
+    CLI_COMMAND_DEF("logic", "configure logic conditions",
         "<rule> <enabled> <operation> <operand A type> <operand A value> <operand B type> <operand B value> <flags>\r\n"
         "\treset\r\n", cliLogic),
+#endif
+#ifdef USE_GLOBAL_FUNCTIONS
+    CLI_COMMAND_DEF("gf", "configure global functions",
+        "<rule> <enabled> <logic condition> <action> <operand type> <operand value> <flags>\r\n"
+        "\treset\r\n", cliGlobalFunctions),
 #endif
     CLI_COMMAND_DEF("set", "change setting", "[<name>=<value>]", cliSet),
     CLI_COMMAND_DEF("smix", "servo mixer",
@@ -3295,7 +3623,7 @@ void cliProcess(void)
                 if (cmd < cmdTable + ARRAYLEN(cmdTable))
                     cmd->func(cliBuffer + strlen(cmd->name) + 1);
                 else
-                    cliPrint("Unknown command, try 'help'");
+                    cliPrintError("Unknown command, try 'help'");
                 bufferIndex = 0;
             }
 
@@ -3338,6 +3666,11 @@ void cliEnter(serialPort_t *serialPort)
     cliPrintLine("\r\nCLI");
 #endif
     cliPrompt();
+
+#ifdef USE_CLI_BATCH
+    resetCommandBatch();
+#endif
+
     ENABLE_ARMING_FLAG(ARMING_DISABLED_CLI);
 }
 
