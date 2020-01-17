@@ -1453,8 +1453,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_RTH_LAND(navig
     const navigationFSMEvent_t landEvent = navOnEnteringState_NAV_STATE_RTH_LANDING(previousState);
     if (landEvent == NAV_FSM_EVENT_SUCCESS) {
         // Landing controller returned success - invoke RTH finishing state and finish the waypoint
-        navOnEnteringState_NAV_STATE_RTH_FINISHING(previousState);
-        return NAV_FSM_EVENT_SUCCESS;
+        return NAV_FSM_EVENT_SUCCESS; //NAV_STATE_RTH_FINISHING
     }
     else {
         return NAV_FSM_EVENT_NONE;
