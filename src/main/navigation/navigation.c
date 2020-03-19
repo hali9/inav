@@ -1331,7 +1331,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_WAIT_ABOVE_HOME(nav
 
     if (navStateRthHoverAboveHome() == NAV_FSM_EVENT_NONE) return NAV_FSM_EVENT_NONE;
 
-    if ((millis() - posControl.lastWaypointReachedAt) >= navConfig()->general.rth_home_wait * 1000) {
+    if ((millis() - posControl.wpReachedTime) >= navConfig()->general.rth_home_wait * 1000) {
         return NAV_FSM_EVENT_SUCCESS;   // NAV_STATE_RTH_LANDING
     }
 
