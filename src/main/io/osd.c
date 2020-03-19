@@ -802,7 +802,7 @@ static const char * navigationStateMessage(void)
             break;
         case MW_NAV_STATE_LAND_START:
             // RTH wait
-            break;
+            return OSD_MESSAGE_STR("WAIT BEFORE LANDING");
         case MW_NAV_STATE_EMERGENCY_LANDING:
             return OSD_MESSAGE_STR("EMERGENCY LANDING");
         case MW_NAV_STATE_LAND_IN_PROGRESS:
