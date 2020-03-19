@@ -232,7 +232,6 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_FINISHED(navigation
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_INITIALIZE(navigationFSMState_t previousState);
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_PRE_ACTION(navigationFSMState_t previousState);
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(navigationFSMState_t previousState);
-static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_WAIT(navigationFSMState_t previousState);
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(navigationFSMState_t previousState);
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_HOLD_TIME(navigationFSMState_t previousState);
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_NEXT(navigationFSMState_t previousState);
@@ -668,27 +667,6 @@ static const navigationFSMStateDescriptor_t navFSM[NAV_STATE_COUNT] = {
         .onEvent = {
             [NAV_FSM_EVENT_TIMEOUT]                     = NAV_STATE_WAYPOINT_IN_PROGRESS,   // re-process the state
             [NAV_FSM_EVENT_SUCCESS]                     = NAV_STATE_WAYPOINT_WAIT,       // successfully reached waypoint, wait by p2 time
-            [NAV_FSM_EVENT_SWITCH_TO_IDLE]              = NAV_STATE_IDLE,
-            [NAV_FSM_EVENT_SWITCH_TO_ALTHOLD]           = NAV_STATE_ALTHOLD_INITIALIZE,
-            [NAV_FSM_EVENT_SWITCH_TO_POSHOLD_3D]        = NAV_STATE_POSHOLD_3D_INITIALIZE,
-            [NAV_FSM_EVENT_SWITCH_TO_RTH]               = NAV_STATE_RTH_INITIALIZE,
-            [NAV_FSM_EVENT_SWITCH_TO_EMERGENCY_LANDING] = NAV_STATE_EMERGENCY_LANDING_INITIALIZE,
-            [NAV_FSM_EVENT_SWITCH_TO_CRUISE_2D]         = NAV_STATE_CRUISE_2D_INITIALIZE,
-            [NAV_FSM_EVENT_SWITCH_TO_CRUISE_3D]         = NAV_STATE_CRUISE_3D_INITIALIZE,
-        }
-    },
-
-    [NAV_STATE_WAYPOINT_WAIT] = {
-        .persistentId = NAV_PERSISTENT_ID_WAYPOINT_WAIT,
-        .onEntry = navOnEnteringState_NAV_STATE_WAYPOINT_WAIT,
-        .timeoutMs = 10,
-        .stateFlags = NAV_CTL_ALT | NAV_CTL_POS | NAV_CTL_YAW | NAV_REQUIRE_ANGLE | NAV_REQUIRE_MAGHOLD | NAV_REQUIRE_THRTILT | NAV_AUTO_WP,
-        .mapToFlightModes = NAV_WP_MODE | NAV_ALTHOLD_MODE,
-        .mwState = MW_NAV_STATE_HOLD_TIMED,
-        .mwError = MW_NAV_ERROR_NONE,
-        .onEvent = {
-            [NAV_FSM_EVENT_TIMEOUT]                     = NAV_STATE_WAYPOINT_WAIT,   // re-process the state
-            [NAV_FSM_EVENT_SUCCESS]                     = NAV_STATE_WAYPOINT_REACHED,       // successfully reached waypoint and wait end
             [NAV_FSM_EVENT_SWITCH_TO_IDLE]              = NAV_STATE_IDLE,
             [NAV_FSM_EVENT_SWITCH_TO_ALTHOLD]           = NAV_STATE_ALTHOLD_INITIALIZE,
             [NAV_FSM_EVENT_SWITCH_TO_POSHOLD_3D]        = NAV_STATE_POSHOLD_3D_INITIALIZE,
@@ -1295,14 +1273,14 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_RTH_HOVER_PRIOR_TO_LAND
         if (STATE(FIXED_WING_LEGACY)) {
             resetLandingDetector();
             updateClimbRateToAltitudeController(0, ROC_TO_ALT_RESET);
-            posControl.lastWaypointReachedAt = millis();
+            posControl.wpReachedTime = millis();
             return navigationRTHAllowsLanding() ? NAV_FSM_EVENT_SUCCESS : NAV_FSM_EVENT_SWITCH_TO_RTH_HOVER_ABOVE_HOME;
         }
         else {
             if (ABS(wrap_18000(posControl.rthState.homePosition.yaw - posControl.actualState.yaw)) < DEGREES_TO_CENTIDEGREES(15)) {
                 resetLandingDetector();
                 updateClimbRateToAltitudeController(0, ROC_TO_ALT_RESET);
-                posControl.lastWaypointReachedAt = millis();
+                posControl.wpReachedTime = millis();
                 return navigationRTHAllowsLanding() ? NAV_FSM_EVENT_SUCCESS : NAV_FSM_EVENT_SWITCH_TO_RTH_HOVER_ABOVE_HOME;
             }
             else if (!validateRTHSanityChecker()) {
@@ -1516,8 +1494,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
             case NAV_WP_ACTION_HOLD_TIME:
             case NAV_WP_ACTION_WAYPOINT:
                 if (isWaypointReached(&posControl.activeWaypoint, false) || isWaypointMissed(&posControl.activeWaypoint)) {
-                    posControl.lastWaypointReachedAt = millis();
-                    return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_WAIT
+                    return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_REACHED
                 }
                 else {
                     fpVector3_t tmpWaypoint;
@@ -1536,8 +1513,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
 
             case NAV_WP_ACTION_RTH:
                 if (isWaypointReached(&posControl.activeWaypoint, true) || isWaypointMissed(&posControl.activeWaypoint)) {
-                    posControl.lastWaypointReachedAt = millis();
-                    return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_WAIT
+                    return NAV_FSM_EVENT_SUCCESS;   // will switch to NAV_STATE_WAYPOINT_REACHED
                 }
                 else {
                     setDesiredPosition(&posControl.activeWaypoint.pos, 0, NAV_POS_UPDATE_XY | NAV_POS_UPDATE_BEARING);
@@ -1558,18 +1534,6 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_IN_PROGRESS(na
     UNREACHABLE();
 }
 
-static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_WAIT(navigationFSMState_t previousState)
-{
-    UNUSED(previousState);
-
-    uint32_t wait = posControl.waypointList[posControl.activeWaypointIndex].p2 > 0 ? posControl.waypointList[posControl.activeWaypointIndex].p2 : 0;
-    if ((millis() - posControl.lastWaypointReachedAt) >= wait * 1000) {
-        return NAV_FSM_EVENT_SUCCESS;   // NAV_STATE_WAYPOINT_NEXT
-    } else {
-        return NAV_FSM_EVENT_NONE;
-    }
-}
-
 static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(navigationFSMState_t previousState)
 {
     UNUSED(previousState);
@@ -1583,6 +1547,7 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(naviga
 
         case NAV_WP_ACTION_RTH:
             if (posControl.waypointList[posControl.activeWaypointIndex].p1 != 0) {
+                posControl.wpReachedTime = millis();
                 return NAV_FSM_EVENT_SWITCH_TO_WAYPOINT_RTH_LAND;
             }
             else {
