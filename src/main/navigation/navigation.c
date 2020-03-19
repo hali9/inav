@@ -1547,7 +1547,6 @@ static navigationFSMEvent_t navOnEnteringState_NAV_STATE_WAYPOINT_REACHED(naviga
 
         case NAV_WP_ACTION_RTH:
             if (posControl.waypointList[posControl.activeWaypointIndex].p1 != 0) {
-                posControl.wpReachedTime = millis();
                 return NAV_FSM_EVENT_SWITCH_TO_WAYPOINT_RTH_LAND;
             }
             else {
