@@ -255,7 +255,7 @@ PG_RESET_TEMPLATE(pidProfile_t, pidProfile,
         .fixedWingReferenceAirspeed = 1000,
         .fixedWingCoordinatedYawGain = 1.0f,
         .fixedWingItermLimitOnStickPosition = 0.5f,
-
+        .keying_prevent = 100.0f,
         .loiter_direction = NAV_LOITER_RIGHT,
         .navVelXyDTermLpfHz = NAV_ACCEL_CUTOFF_FREQUENCY_HZ,
         .iterm_relax_type = ITERM_RELAX_SETPOINT,
