@@ -69,6 +69,7 @@ static float throttleSpeedAdjustment = 0;
 static bool isAutoThrottleManuallyIncreased = false;
 static int32_t navHeadingError;
 static int8_t loiterDirYaw = 1;
+static int16_t previousThrottle = 1000;
 
 // Calculates the cutoff frequency for smoothing out roll/pitch commands 
 // control_smoothness valid range from 0 to 9
@@ -254,8 +255,19 @@ static void calculateVirtualPositionTarget_FW(float trackingPeriod)
 
     float distanceToActualTarget = sqrtf(sq(posErrorX) + sq(posErrorY));
 
+    previousThrottle = constrainf(previousThrottle, navConfig()->fw.min_throttle, navConfig()->fw.max_throttle);
+    float airspeedForTrackingDistance = scaleRangef(previousThrottle, navConfig()->fw.cruise_throttle, navConfig()->fw.max_throttle,
+        pidProfile()->fixedWingReferenceAirspeed, pidProfile()->fixedWingReferenceAirspeed * 1.5f);
+    if (previousThrottle < navConfig()->fw.cruise_throttle) 
+        airspeedForTrackingDistance = scaleRangef(previousThrottle, navConfig()->fw.min_throttle, navConfig()->fw.cruise_throttle,
+            pidProfile()->fixedWingReferenceAirspeed / 2, pidProfile()->fixedWingReferenceAirspeed);
+#if defined(USE_PITOT)
+    if (sensors(SENSOR_PITOT)) airspeedForTrackingDistance = pitot.airSpeed;
+#endif
+    airspeedForTrackingDistance = constrainf(airspeedForTrackingDistance, 100.0f, pidProfile()->keying_prevent);
+
     // Limit minimum forward velocity to 1 m/s
-    float trackingDistance = trackingPeriod * MAX(posControl.actualState.velXY, 100.0f);
+    float trackingDistance = trackingPeriod * MAX(posControl.actualState.velXY, airspeedForTrackingDistance);
 
     // If angular visibility of a waypoint is less than 30deg, don't calculate circular loiter, go straight to the target
     #define TAN_15DEG    0.26795f
@@ -575,6 +587,7 @@ void applyFixedWingPitchRollThrottleController(navigationFSMStateFlags_t navStat
         }
     }
 #endif
+    previousThrottle = rcCommand[THROTTLE];
 }
 
 bool isFixedWingAutoThrottleManuallyIncreased()
