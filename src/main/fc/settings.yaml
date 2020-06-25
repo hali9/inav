@@ -1115,6 +1115,11 @@ groups:
         field: loiter_direction
         condition: USE_NAV
         table: direction
+      - name: fw_keying_prevent
+        field: keying_prevent
+        condition: USE_NAV
+        min: 100
+        max: 10000
       - name: fw_reference_airspeed
         field: fixedWingReferenceAirspeed
         min: 1
